@@ -1,0 +1,14 @@
+/vendor/
+/var/cache/*
+!/var/cache/.gitkeep
+/var/log/*
+!/var/log/.gitkeep
+/tools/
+/.phpunit.cache/
+/.phplint.cache/
+/.phpcs-cache
+/.php-cs-fixer.cache
+/.env.local
+/.env.*.local
+.idea
+.claude
