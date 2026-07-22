@@ -3,7 +3,6 @@
     "description": "CLI tool to compare two IES publication channels.",
     "type": "project",
     "license": "MIT",
-    "bin": ["bin/console"],
     "authors": [
         {
             "name": "veltrup",
