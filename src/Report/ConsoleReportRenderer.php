@@ -31,6 +31,15 @@ final class ConsoleReportRenderer
         if (!$report->scope->isAll()) {
             $lines[] = sprintf('Scope: %s', $report->scope->subPath);
         }
+        foreach ($report->rules->sources as $source) {
+            $lines[] = sprintf('Rules: %s', $source);
+        }
+        if ($report->rules->floatPrecision !== null) {
+            $lines[] = sprintf(
+                'Float precision: %d decimal places',
+                $report->rules->floatPrecision,
+            );
+        }
         $io->listing($lines);
 
         $this->renderResources($report, $io);

@@ -12,6 +12,8 @@ use Atoolo\ChannelDiff\Enumerator\ResourceEnumerator;
 use Atoolo\ChannelDiff\Loader\ResourceFileReader;
 use Atoolo\ChannelDiff\Report\ConsoleReportRenderer;
 use Atoolo\ChannelDiff\Report\JsonReportRenderer;
+use Atoolo\ChannelDiff\Rules\RuleFileLoader;
+use Atoolo\ChannelDiff\Rules\RuleFileLocator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -32,10 +34,15 @@ final class DiffCommandTest extends TestCase
             ),
             new ConsoleReportRenderer(),
             new JsonReportRenderer(),
+            new RuleFileLocator(),
+            new RuleFileLoader(),
         ));
     }
 
     /**
+     * Rule-file discovery walks up to the filesystem root, so it is switched off
+     * by default here; the rule tests pass their own file explicitly.
+     *
      * @param array<string, string|bool> $extra
      */
     private function diff(?string $subPath, array $extra = []): CommandTester
@@ -44,6 +51,7 @@ final class DiffCommandTest extends TestCase
         $input = [
             'channelA' => self::FIXTURES . '/channelA',
             'channelB' => self::FIXTURES . '/channelB',
+            '--no-rules' => true,
         ];
         if ($subPath !== null) {
             $input['subPath'] = $subPath;
@@ -84,6 +92,7 @@ final class DiffCommandTest extends TestCase
             'channelA' => self::FIXTURES . '/channelA',
             'channelB' => self::FIXTURES . '/channelA',
             'subPath' => 'objects',
+            '--no-rules' => true,
         ]);
 
         self::assertSame(0, $tester->getStatusCode());
@@ -107,6 +116,104 @@ final class DiffCommandTest extends TestCase
 
         self::assertSame(2, $tester->getStatusCode());
         self::assertStringContainsString('must not contain ".."', $tester->getDisplay());
+    }
+
+    public function testExplicitRuleFileSuppressesTheExcludedField(): void
+    {
+        $tester = $this->diff(null, [
+            '--rules' => self::FIXTURES . '/rules/channel-fixtures.yaml',
+        ]);
+
+        $display = $tester->getDisplay();
+        self::assertStringContainsString('channel-fixtures.yaml', $display);
+        self::assertStringNotContainsString('base.title', $display);
+        // Fields the rule file does not cover are still reported.
+        self::assertStringContainsString('base.addedField', $display);
+    }
+
+    /**
+     * The float in the fixtures differs by ~6.1e-9, so 8 decimal places are not
+     * enough to make the two sides equal, but 7 are.
+     */
+    public function testFloatPrecisionFromTheRuleFileIsApplied(): void
+    {
+        $tester = $this->diff(null, [
+            '--rules' => self::FIXTURES . '/rules/channel-fixtures.yaml',
+        ]);
+
+        self::assertStringContainsString('Float precision: 7', $tester->getDisplay());
+        self::assertStringNotContainsString('base.focalpoint.x', $tester->getDisplay());
+    }
+
+    public function testFloatPrecisionOnTheCommandLineOverridesTheRuleFile(): void
+    {
+        $tester = $this->diff(null, [
+            '--rules' => self::FIXTURES . '/rules/channel-fixtures.yaml',
+            '--float-precision' => '8',
+        ]);
+
+        self::assertStringContainsString('Float precision: 8', $tester->getDisplay());
+        self::assertStringContainsString('base.focalpoint.x', $tester->getDisplay());
+    }
+
+    public function testFloatPrecisionWithoutARuleFile(): void
+    {
+        $tester = $this->diff(null, ['--float-precision' => '7']);
+
+        self::assertStringNotContainsString('base.focalpoint.x', $tester->getDisplay());
+    }
+
+    public function testNonNumericFloatPrecisionIsAnError(): void
+    {
+        $tester = $this->diff(null, ['--float-precision' => 'seven']);
+
+        self::assertSame(2, $tester->getStatusCode());
+        self::assertStringContainsString('non-negative integer', $tester->getDisplay());
+    }
+
+    public function testMissingRuleFileIsAnError(): void
+    {
+        $tester = $this->diff(null, ['--rules' => self::FIXTURES . '/rules/nope.yaml']);
+
+        self::assertSame(2, $tester->getStatusCode());
+        self::assertStringContainsString('does not exist', $tester->getDisplay());
+    }
+
+    public function testRuleFileIsDiscoveredAboveBothChannels(): void
+    {
+        // One file in the directory that holds both fixture channels.
+        $discovered = self::FIXTURES . '/channel-diff.yaml';
+        copy(self::FIXTURES . '/rules/channel-fixtures.yaml', $discovered);
+
+        try {
+            $tester = $this->tester();
+            $tester->execute([
+                'channelA' => self::FIXTURES . '/channelA',
+                'channelB' => self::FIXTURES . '/channelB',
+            ]);
+        } finally {
+            unlink($discovered);
+        }
+
+        $display = $tester->getDisplay();
+        self::assertStringContainsString('channel-diff.yaml', $display);
+        self::assertStringNotContainsString('base.title', $display);
+        self::assertStringNotContainsString('base.focalpoint.x', $display);
+    }
+
+    public function testNoRulesIgnoresADiscoveredRuleFile(): void
+    {
+        $discovered = self::FIXTURES . '/channel-diff.yaml';
+        copy(self::FIXTURES . '/rules/channel-fixtures.yaml', $discovered);
+
+        try {
+            $tester = $this->diff(null);
+        } finally {
+            unlink($discovered);
+        }
+
+        self::assertStringNotContainsString('Rules:', $tester->getDisplay());
+        self::assertStringContainsString('base.title', $tester->getDisplay());
     }
 
     public function testSubPathPresentInOnlyOneChannelIsNotAnError(): void

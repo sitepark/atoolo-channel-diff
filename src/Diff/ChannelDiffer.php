@@ -9,6 +9,7 @@ use Atoolo\ChannelDiff\Channel\PublicationChannel;
 use Atoolo\ChannelDiff\Enumerator\ResourceEnumerator;
 use Atoolo\ChannelDiff\Loader\ResourceFileReader;
 use Atoolo\ChannelDiff\Loader\ResourceReadException;
+use Atoolo\ChannelDiff\Rules\RuleSet;
 
 /**
  * Orchestrates the comparison of two publication channels: matches resources
@@ -27,12 +28,17 @@ final class ChannelDiffer
         PublicationChannel $b,
         IgnoreList $ignore,
         ChannelScope $scope = new ChannelScope(),
+        RuleSet $rules = new RuleSet(),
         bool $includeMedia = true,
         bool $nullEqualsMissing = true,
         bool $emptyStringEqualsMissing = true,
         bool $emptyArrayEqualsMissing = true,
         bool $normalizeUuidKeys = true,
     ): DiffReport {
+        // Applied here rather than by the caller, so that passing a rule set
+        // always applies all of it.
+        $ignore = $ignore->withAdditional($rules->excludes);
+
         [$resourceDiffs, $resourcesIdentical, $totalA, $totalB] = $this->diffResources(
             $a,
             $b,
@@ -42,6 +48,7 @@ final class ChannelDiffer
             $emptyStringEqualsMissing,
             $emptyArrayEqualsMissing,
             $normalizeUuidKeys,
+            $rules->floatTolerance(),
         );
 
         $mediaDiffs = [];
@@ -66,6 +73,7 @@ final class ChannelDiffer
             $mediaIdentical,
             $includeMedia,
             $scope,
+            $rules,
         );
     }
 
@@ -81,6 +89,7 @@ final class ChannelDiffer
         bool $emptyStringEqualsMissing,
         bool $emptyArrayEqualsMissing,
         bool $normalizeUuidKeys,
+        ?float $floatTolerance,
     ): array {
         $mapA = $this->enumerator->resources($a, $scope);
         $mapB = $this->enumerator->resources($b, $scope);
@@ -129,6 +138,7 @@ final class ChannelDiffer
                 $emptyStringEqualsMissing,
                 $emptyArrayEqualsMissing,
                 $normalizeUuidKeys,
+                $floatTolerance,
             );
             if ($fieldDiffs === []) {
                 $identical++;

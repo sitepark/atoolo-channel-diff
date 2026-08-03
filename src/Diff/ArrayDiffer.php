@@ -29,6 +29,8 @@ final class ArrayDiffer
      *        all UUIDs are matched by the content of their values instead of by
      *        their (volatile) keys; inner values equal to the key (e.g. a
      *        mirrored "id") are neutralized so entries can pair up.
+     * @param float|null $floatTolerance When set, two floats count as equal if
+     *        they differ by at most this much. Null compares them strictly.
      * @return list<FieldDiff>
      */
     public function diff(
@@ -39,6 +41,7 @@ final class ArrayDiffer
         bool $emptyStringEqualsMissing = true,
         bool $emptyArrayEqualsMissing = true,
         bool $normalizeUuidKeys = true,
+        ?float $floatTolerance = null,
     ): array {
         $context = new DiffContext(
             $ignore,
@@ -46,6 +49,7 @@ final class ArrayDiffer
             $emptyStringEqualsMissing,
             $emptyArrayEqualsMissing,
             $normalizeUuidKeys,
+            $floatTolerance,
         );
 
         $diffs = [];
@@ -118,7 +122,7 @@ final class ArrayDiffer
             return;
         }
 
-        if (!$this->valuesEqual($a, $b)) {
+        if (!$this->valuesEqual($a, $b, $context)) {
             $diffs[] = new FieldDiff($path, ChangeType::CHANGED, $a, $b);
         }
     }
@@ -275,9 +279,10 @@ final class ArrayDiffer
      * Objects from the resource scripts are compared structurally rather than
      * by instance identity, since each read produces fresh instances.
      * Closures (e.g. from "code" content sections) are not value-comparable, so
-     * their source text is compared instead. Scalars are compared strictly.
+     * their source text is compared instead. Scalars are compared strictly,
+     * except that two floats may be allowed a tolerance.
      */
-    private function valuesEqual(mixed $a, mixed $b): bool
+    private function valuesEqual(mixed $a, mixed $b, DiffContext $context): bool
     {
         if ($a instanceof \Closure || $b instanceof \Closure) {
             return $a instanceof \Closure
@@ -289,7 +294,17 @@ final class ArrayDiffer
             return $a == $b;
         }
 
-        return $a === $b;
+        if ($a === $b) {
+            return true;
+        }
+
+        // Only float/float pairs are compared with a tolerance: a float against
+        // an int (or a numeric string) is a type change, not a precision issue.
+        if ($context->floatTolerance !== null && is_float($a) && is_float($b)) {
+            return abs($a - $b) <= $context->floatTolerance;
+        }
+
+        return false;
     }
 
     private function closureSource(\Closure $closure): string

@@ -1,0 +1,7 @@
+# Rules used by the DiffCommand tests against the channelA/channelB fixtures.
+excludes:
+  - 'base.title'
+
+# The fixtures' focalpoint differs by ~6.1e-9, which 7 decimal places accept
+# but 8 do not.
+floatPrecision: 7

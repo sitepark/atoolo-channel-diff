@@ -25,6 +25,11 @@ final class JsonReportRenderer
             'channelA' => $this->channel($report->channelA),
             'channelB' => $this->channel($report->channelB),
             'scope' => $report->scope->isAll() ? null : $report->scope->subPath,
+            'rules' => [
+                'sources' => $report->rules->sources,
+                'excludes' => $report->rules->excludes,
+                'floatPrecision' => $report->rules->floatPrecision,
+            ],
             'stats' => [
                 'resources' => [
                     'totalA' => $report->totalResourcesA,

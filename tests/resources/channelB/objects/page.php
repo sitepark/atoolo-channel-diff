@@ -11,5 +11,6 @@ return [
         'title' => 'Neu',
         'keep' => 'x',
         'addedField' => 'new',
+        'focalpoint' => ['x' => 0.49298245],
     ],
 ];
