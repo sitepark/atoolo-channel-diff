@@ -1,0 +1,5 @@
+# Accepted differences.
+excludes:
+  - '**.sources.*.static'
+  - 'searchindexdata'
+floatPrecision: 7

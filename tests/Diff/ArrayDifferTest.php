@@ -390,4 +390,106 @@ final class ArrayDifferTest extends TestCase
         self::assertCount(1, $diffs);
         self::assertSame('fn', $diffs[0]->path);
     }
+
+    public function testFloatsDifferWithoutATolerance(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => 0.40263157894737],
+            ['x' => 0.40263158],
+            new IgnoreList([]),
+        );
+
+        self::assertCount(1, $diffs);
+        self::assertSame('x', $diffs[0]->path);
+    }
+
+    public function testFloatsWithinTheToleranceAreEqual(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => 0.40263157894737, 'y' => 0.75206611570248],
+            ['x' => 0.40263158, 'y' => 0.75206614],
+            new IgnoreList([]),
+            floatTolerance: 5.0e-8,
+        );
+
+        self::assertSame([], $diffs);
+    }
+
+    public function testFloatsOutsideTheToleranceStillDiffer(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => 0.4026],
+            ['x' => 0.4027],
+            new IgnoreList([]),
+            floatTolerance: 5.0e-8,
+        );
+
+        self::assertCount(1, $diffs);
+        self::assertSame('x', $diffs[0]->path);
+    }
+
+    public function testToleranceAppliesInsideNestedArrays(): void
+    {
+        $diffs = $this->differ->diff(
+            ['model' => ['options' => ['focalpoint' => ['x' => 0.49298245614035]]]],
+            ['model' => ['options' => ['focalpoint' => ['x' => 0.49298245]]]],
+            new IgnoreList([]),
+            floatTolerance: 5.0e-8,
+        );
+
+        self::assertSame([], $diffs);
+    }
+
+    /**
+     * A float against an int is a type change, not a precision issue, so the
+     * tolerance must not paper over it.
+     */
+    public function testToleranceDoesNotApplyBetweenFloatAndInt(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => 1.0],
+            ['x' => 1],
+            new IgnoreList([]),
+            floatTolerance: 5.0e-8,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    public function testToleranceDoesNotApplyToNumericStrings(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => '0.40263157894737'],
+            ['x' => '0.40263158'],
+            new IgnoreList([]),
+            floatTolerance: 5.0e-8,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    public function testIdenticalInfinitiesAreEqualDespiteTheTolerance(): void
+    {
+        // abs(INF - INF) is NAN, which no comparison would accept.
+        $diffs = $this->differ->diff(
+            ['x' => INF],
+            ['x' => INF],
+            new IgnoreList([]),
+            floatTolerance: 5.0e-8,
+        );
+
+        self::assertSame([], $diffs);
+    }
+
+    public function testToleranceIsUsedWhenMatchingNormalizedEntriesByContent(): void
+    {
+        $diffs = $this->differ->diff(
+            ['points' => ['k1' => ['x' => 0.49298245614035]]],
+            ['points' => ['k2' => ['x' => 0.49298245]]],
+            new IgnoreList(['points.*']),
+            floatTolerance: 5.0e-8,
+        );
+
+        self::assertSame([], $diffs);
+    }
 }

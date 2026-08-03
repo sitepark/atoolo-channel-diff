@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Atoolo\ChannelDiff\Diff;
 
+use Atoolo\ChannelDiff\Channel\ChannelScope;
 use Atoolo\ChannelDiff\Channel\PublicationChannel;
+use Atoolo\ChannelDiff\Rules\RuleSet;
 
 /**
  * Aggregated result of comparing two publication channels.
@@ -27,6 +29,8 @@ final class DiffReport
         public readonly int $totalMediaB,
         public readonly int $mediaIdentical,
         public readonly bool $mediaCompared,
+        public readonly ChannelScope $scope = new ChannelScope(),
+        public readonly RuleSet $rules = new RuleSet(),
     ) {}
 
     public function hasDifferences(): bool

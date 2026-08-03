@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Atoolo\ChannelDiff\Diff;
 
+use Atoolo\ChannelDiff\Channel\ChannelScope;
 use Atoolo\ChannelDiff\Channel\PublicationChannel;
 use Atoolo\ChannelDiff\Enumerator\ResourceEnumerator;
 use Atoolo\ChannelDiff\Loader\ResourceFileReader;
 use Atoolo\ChannelDiff\Loader\ResourceReadException;
+use Atoolo\ChannelDiff\Rules\RuleSet;
 
 /**
  * Orchestrates the comparison of two publication channels: matches resources
@@ -25,20 +27,28 @@ final class ChannelDiffer
         PublicationChannel $a,
         PublicationChannel $b,
         IgnoreList $ignore,
+        ChannelScope $scope = new ChannelScope(),
+        RuleSet $rules = new RuleSet(),
         bool $includeMedia = true,
         bool $nullEqualsMissing = true,
         bool $emptyStringEqualsMissing = true,
         bool $emptyArrayEqualsMissing = true,
         bool $normalizeUuidKeys = true,
     ): DiffReport {
+        // Applied here rather than by the caller, so that passing a rule set
+        // always applies all of it.
+        $ignore = $ignore->withAdditional($rules->excludes);
+
         [$resourceDiffs, $resourcesIdentical, $totalA, $totalB] = $this->diffResources(
             $a,
             $b,
             $ignore,
+            $scope,
             $nullEqualsMissing,
             $emptyStringEqualsMissing,
             $emptyArrayEqualsMissing,
             $normalizeUuidKeys,
+            $rules->floatTolerance(),
         );
 
         $mediaDiffs = [];
@@ -47,7 +57,7 @@ final class ChannelDiffer
         $totalMediaB = 0;
         if ($includeMedia) {
             [$mediaDiffs, $mediaIdentical, $totalMediaA, $totalMediaB]
-                = $this->diffMedia($a, $b);
+                = $this->diffMedia($a, $b, $scope);
         }
 
         return new DiffReport(
@@ -62,6 +72,8 @@ final class ChannelDiffer
             $totalMediaB,
             $mediaIdentical,
             $includeMedia,
+            $scope,
+            $rules,
         );
     }
 
@@ -72,13 +84,15 @@ final class ChannelDiffer
         PublicationChannel $a,
         PublicationChannel $b,
         IgnoreList $ignore,
+        ChannelScope $scope,
         bool $nullEqualsMissing,
         bool $emptyStringEqualsMissing,
         bool $emptyArrayEqualsMissing,
         bool $normalizeUuidKeys,
+        ?float $floatTolerance,
     ): array {
-        $mapA = $this->enumerator->resources($a);
-        $mapB = $this->enumerator->resources($b);
+        $mapA = $this->enumerator->resources($a, $scope);
+        $mapB = $this->enumerator->resources($b, $scope);
 
         $diffs = [];
         $identical = 0;
@@ -124,6 +138,7 @@ final class ChannelDiffer
                 $emptyStringEqualsMissing,
                 $emptyArrayEqualsMissing,
                 $normalizeUuidKeys,
+                $floatTolerance,
             );
             if ($fieldDiffs === []) {
                 $identical++;
@@ -143,10 +158,13 @@ final class ChannelDiffer
     /**
      * @return array{0: list<MediaDiff>, 1: int, 2: int, 3: int}
      */
-    private function diffMedia(PublicationChannel $a, PublicationChannel $b): array
-    {
-        $mapA = $this->enumerator->media($a);
-        $mapB = $this->enumerator->media($b);
+    private function diffMedia(
+        PublicationChannel $a,
+        PublicationChannel $b,
+        ChannelScope $scope,
+    ): array {
+        $mapA = $this->enumerator->media($a, $scope);
+        $mapB = $this->enumerator->media($b, $scope);
 
         $diffs = [];
         $identical = 0;

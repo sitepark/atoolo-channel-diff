@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Atoolo\ChannelDiff\Command;
 
 use Atoolo\ChannelDiff\Channel\ChannelFactory;
+use Atoolo\ChannelDiff\Channel\ChannelScope;
+use Atoolo\ChannelDiff\Channel\PublicationChannel;
 use Atoolo\ChannelDiff\Diff\ChannelDiffer;
 use Atoolo\ChannelDiff\Diff\IgnoreList;
 use Atoolo\ChannelDiff\Report\ConsoleReportRenderer;
 use Atoolo\ChannelDiff\Report\JsonReportRenderer;
+use Atoolo\ChannelDiff\Rules\RuleFileLoader;
+use Atoolo\ChannelDiff\Rules\RuleFileLocator;
+use Atoolo\ChannelDiff\Rules\RuleSet;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -31,6 +36,8 @@ final class DiffCommand extends Command
         private readonly ChannelDiffer $differ,
         private readonly ConsoleReportRenderer $consoleRenderer,
         private readonly JsonReportRenderer $jsonRenderer,
+        private readonly RuleFileLocator $ruleFileLocator,
+        private readonly RuleFileLoader $ruleFileLoader,
     ) {
         parent::__construct();
     }
@@ -40,9 +47,13 @@ final class DiffCommand extends Command
         $this
             ->addArgument('channelA', InputArgument::REQUIRED, 'Base directory of the first publication channel.')
             ->addArgument('channelB', InputArgument::REQUIRED, 'Base directory of the second publication channel.')
+            ->addArgument('subPath', InputArgument::OPTIONAL, 'Restrict the comparison to this sub directory, relative to the channel base directory (e.g. "objects/de" or "media/public/img").')
             ->addOption('format', 'f', InputOption::VALUE_REQUIRED, 'Output format: console or json.', self::FORMAT_CONSOLE)
             ->addOption('ignore', 'i', InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Additional dot-notation field path to ignore (repeatable).')
             ->addOption('ignore-config', null, InputOption::VALUE_REQUIRED, 'PHP file returning a list of dot-notation field paths to ignore.')
+            ->addOption('rules', null, InputOption::VALUE_REQUIRED, 'Rule file (YAML) with accepted differences. By default the nearest "' . RuleFileLocator::FILE_NAMES[0] . '" at or above either channel base directory is used.')
+            ->addOption('no-rules', null, InputOption::VALUE_NONE, 'Ignore any rule file found next to the channels.')
+            ->addOption('float-precision', null, InputOption::VALUE_REQUIRED, 'Number of decimal places at which two floats still count as equal (overrides the rule file).')
             ->addOption('no-media', null, InputOption::VALUE_NONE, 'Skip the binary media comparison.')
             ->addOption('strict-null', null, InputOption::VALUE_NONE, 'Treat a null field and a missing field as different (by default they are equal).')
             ->addOption('strict-empty-string', null, InputOption::VALUE_NONE, 'Treat an empty-string field and a missing field as different (by default they are equal).')
@@ -53,6 +64,23 @@ final class DiffCommand extends Command
                 . 'media on their relative file path. Resource PHP files are compared '
                 . 'as nested arrays (with volatile fields ignored); binary media are '
                 . 'compared by sha256 hash.' . PHP_EOL . PHP_EOL
+                . 'The optional third argument restricts the comparison to a sub '
+                . 'directory of both channels. It is resolved against the channel '
+                . 'base directory, so it addresses the resource tree and the media '
+                . 'tree alike; a sub path that lies outside one of the two trees '
+                . 'simply excludes it (e.g. "objects/de" compares no media).'
+                . PHP_EOL . PHP_EOL
+                . 'Differences that have been reviewed and accepted can be recorded '
+                . 'in a rule file so they stop being reported. Place a "'
+                . RuleFileLocator::FILE_NAMES[0] . '" next to the channels (it is '
+                . 'looked up from each channel base directory upwards, so one file '
+                . 'above both channels covers both):' . PHP_EOL . PHP_EOL
+                . '    excludes:' . PHP_EOL
+                . '      - \'**.sources.*.static\'' . PHP_EOL
+                . '    floatPrecision: 7' . PHP_EOL . PHP_EOL
+                . '"excludes" uses the same field paths and wildcards as --ignore. '
+                . '"floatPrecision" is the number of decimal places at which two '
+                . 'floats still count as equal.' . PHP_EOL . PHP_EOL
                 . 'Exit code 0 = identical, 1 = differences found, 2 = error.',
             );
     }
@@ -70,6 +98,8 @@ final class DiffCommand extends Command
         try {
             $channelA = $this->channelFactory->create((string) $input->getArgument('channelA'));
             $channelB = $this->channelFactory->create((string) $input->getArgument('channelB'));
+            $scope = $this->buildScope($input, $channelA, $channelB);
+            $rules = $this->buildRuleSet($input, $channelA, $channelB);
             $ignore = $this->buildIgnoreList($input);
         } catch (\Throwable $e) {
             $io->error($e->getMessage());
@@ -80,6 +110,8 @@ final class DiffCommand extends Command
             $channelA,
             $channelB,
             $ignore,
+            $scope,
+            $rules,
             !$input->getOption('no-media'),
             !$input->getOption('strict-null'),
             !$input->getOption('strict-empty-string'),
@@ -94,6 +126,76 @@ final class DiffCommand extends Command
         }
 
         return $report->hasDifferences() ? 1 : 0;
+    }
+
+    /**
+     * A sub path that exists in neither channel is a typo, not an empty diff:
+     * reporting "identical" for it would be actively misleading. Existing in
+     * only one channel, on the other hand, is a real difference.
+     */
+    private function buildScope(
+        InputInterface $input,
+        PublicationChannel $channelA,
+        PublicationChannel $channelB,
+    ): ChannelScope {
+        $argument = $input->getArgument('subPath');
+        $scope = ChannelScope::fromInput(
+            is_string($argument) ? $argument : null,
+        );
+
+        if (
+            !$scope->isAll()
+            && !is_dir($scope->absolutePath($channelA->baseDir))
+            && !is_dir($scope->absolutePath($channelB->baseDir))
+        ) {
+            throw new \InvalidArgumentException(sprintf(
+                'Sub path "%s" does not exist in either channel.',
+                $scope->subPath,
+            ));
+        }
+
+        return $scope;
+    }
+
+    /**
+     * Collects the accepted differences: an explicit --rules file, or otherwise
+     * the nearest rule file at or above either channel (one file above both
+     * channels therefore governs both), with --float-precision on top.
+     */
+    private function buildRuleSet(
+        InputInterface $input,
+        PublicationChannel $channelA,
+        PublicationChannel $channelB,
+    ): RuleSet {
+        $rules = new RuleSet();
+
+        $explicit = $input->getOption('rules');
+        if (is_string($explicit) && $explicit !== '') {
+            $rules = $rules->merge($this->ruleFileLoader->load($explicit));
+        } elseif (!$input->getOption('no-rules')) {
+            $files = $this->ruleFileLocator->locateAll([
+                $channelA->baseDir,
+                $channelB->baseDir,
+            ]);
+            foreach ($files as $file) {
+                $rules = $rules->merge($this->ruleFileLoader->load($file));
+            }
+        }
+
+        $precision = $input->getOption('float-precision');
+        if (is_string($precision) && $precision !== '') {
+            if (!ctype_digit($precision)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Float precision must be a non-negative integer, got "%s".',
+                    $precision,
+                ));
+            }
+            $rules = $rules->merge(new RuleSet(
+                floatPrecision: RuleFileLoader::validatePrecision((int) $precision),
+            ));
+        }
+
+        return $rules;
     }
 
     private function buildIgnoreList(InputInterface $input): IgnoreList
