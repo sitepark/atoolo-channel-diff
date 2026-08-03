@@ -24,10 +24,14 @@ final class ConsoleReportRenderer
     public function render(DiffReport $report, SymfonyStyle $io): void
     {
         $io->section('Channels');
-        $io->listing([
+        $lines = [
             sprintf('A: %s (%s)', $report->channelA->baseDir, $report->channelA->layout->value),
             sprintf('B: %s (%s)', $report->channelB->baseDir, $report->channelB->layout->value),
-        ]);
+        ];
+        if (!$report->scope->isAll()) {
+            $lines[] = sprintf('Scope: %s', $report->scope->subPath);
+        }
+        $io->listing($lines);
 
         $this->renderResources($report, $io);
         if ($report->mediaCompared) {

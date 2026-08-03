@@ -65,14 +65,50 @@ git config core.hooksPath .githooks
 ## Usage
 
 ```bash
-php bin/console channel:diff <channelA> <channelB> [options]
+php bin/console channel:diff <channelA> <channelB> [subPath] [options]
 ```
 
-`<channelA>` and `<channelB>` are the base directories of the two publication
-channels, for example:
+### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `<channelA>`, `<channelB>` | Base directories of the two publication channels (required). |
+| `[subPath]` | Restrict the comparison to this sub directory of both channels (optional; default: the whole channel). |
+
+The channel base directories are, for example:
 
 - DOCUMENT_ROOT: `.../publications/<host>/www`
 - RESOURCE: `.../publications/<host>/www/resources`
+
+#### Restricting the comparison to a sub directory
+
+`[subPath]` is resolved against the **channel base directory**, so one path
+expression addresses the resource tree and the media tree alike — even though
+those are separate sub trees in the RESOURCE layout. A sub path that lies
+outside one of the two trees simply excludes that tree from the comparison.
+
+For a RESOURCE-layout channel (`resourceDir` = `<base>/objects`, `mediaDir` =
+`<base>/media/public`):
+
+| `subPath` | Resources compared | Media compared |
+| --- | --- | --- |
+| *(omitted)* | all | all |
+| `objects` | all | none |
+| `objects/de/produkte` | `objects/de/produkte` only | none |
+| `media/public` | none | all |
+| `media/public/img` | none | `media/public/img` only |
+
+In the DOCUMENT_ROOT layout, resources and media share one directory, so a sub
+path narrows both at once.
+
+Only the given sub tree is walked, which also makes a scoped run considerably
+faster than a full channel comparison.
+
+A sub path that exists in **neither** channel is an error (exit code `2`) — it is
+almost always a typo, and reporting it as "identical" would be misleading. A sub
+path that exists in only one of the two channels is a real difference and is
+reported as such. Sub paths must stay inside the channel; `..` segments are
+rejected.
 
 ### Options
 
@@ -106,7 +142,7 @@ Ignore paths may contain wildcard segments:
 | --- | --- |
 | `0` | Channels are identical. |
 | `1` | Differences were found. |
-| `2` | An error occurred (e.g. an invalid path). |
+| `2` | An error occurred (e.g. an invalid channel path, or a `subPath` that exists in neither channel). |
 
 ### Examples
 

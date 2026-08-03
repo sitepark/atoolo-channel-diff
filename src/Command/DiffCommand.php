@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Atoolo\ChannelDiff\Command;
 
 use Atoolo\ChannelDiff\Channel\ChannelFactory;
+use Atoolo\ChannelDiff\Channel\ChannelScope;
+use Atoolo\ChannelDiff\Channel\PublicationChannel;
 use Atoolo\ChannelDiff\Diff\ChannelDiffer;
 use Atoolo\ChannelDiff\Diff\IgnoreList;
 use Atoolo\ChannelDiff\Report\ConsoleReportRenderer;
@@ -40,6 +42,7 @@ final class DiffCommand extends Command
         $this
             ->addArgument('channelA', InputArgument::REQUIRED, 'Base directory of the first publication channel.')
             ->addArgument('channelB', InputArgument::REQUIRED, 'Base directory of the second publication channel.')
+            ->addArgument('subPath', InputArgument::OPTIONAL, 'Restrict the comparison to this sub directory, relative to the channel base directory (e.g. "objects/de" or "media/public/img").')
             ->addOption('format', 'f', InputOption::VALUE_REQUIRED, 'Output format: console or json.', self::FORMAT_CONSOLE)
             ->addOption('ignore', 'i', InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Additional dot-notation field path to ignore (repeatable).')
             ->addOption('ignore-config', null, InputOption::VALUE_REQUIRED, 'PHP file returning a list of dot-notation field paths to ignore.')
@@ -53,6 +56,12 @@ final class DiffCommand extends Command
                 . 'media on their relative file path. Resource PHP files are compared '
                 . 'as nested arrays (with volatile fields ignored); binary media are '
                 . 'compared by sha256 hash.' . PHP_EOL . PHP_EOL
+                . 'The optional third argument restricts the comparison to a sub '
+                . 'directory of both channels. It is resolved against the channel '
+                . 'base directory, so it addresses the resource tree and the media '
+                . 'tree alike; a sub path that lies outside one of the two trees '
+                . 'simply excludes it (e.g. "objects/de" compares no media).'
+                . PHP_EOL . PHP_EOL
                 . 'Exit code 0 = identical, 1 = differences found, 2 = error.',
             );
     }
@@ -70,6 +79,7 @@ final class DiffCommand extends Command
         try {
             $channelA = $this->channelFactory->create((string) $input->getArgument('channelA'));
             $channelB = $this->channelFactory->create((string) $input->getArgument('channelB'));
+            $scope = $this->buildScope($input, $channelA, $channelB);
             $ignore = $this->buildIgnoreList($input);
         } catch (\Throwable $e) {
             $io->error($e->getMessage());
@@ -80,6 +90,7 @@ final class DiffCommand extends Command
             $channelA,
             $channelB,
             $ignore,
+            $scope,
             !$input->getOption('no-media'),
             !$input->getOption('strict-null'),
             !$input->getOption('strict-empty-string'),
@@ -94,6 +105,35 @@ final class DiffCommand extends Command
         }
 
         return $report->hasDifferences() ? 1 : 0;
+    }
+
+    /**
+     * A sub path that exists in neither channel is a typo, not an empty diff:
+     * reporting "identical" for it would be actively misleading. Existing in
+     * only one channel, on the other hand, is a real difference.
+     */
+    private function buildScope(
+        InputInterface $input,
+        PublicationChannel $channelA,
+        PublicationChannel $channelB,
+    ): ChannelScope {
+        $argument = $input->getArgument('subPath');
+        $scope = ChannelScope::fromInput(
+            is_string($argument) ? $argument : null,
+        );
+
+        if (
+            !$scope->isAll()
+            && !is_dir($scope->absolutePath($channelA->baseDir))
+            && !is_dir($scope->absolutePath($channelB->baseDir))
+        ) {
+            throw new \InvalidArgumentException(sprintf(
+                'Sub path "%s" does not exist in either channel.',
+                $scope->subPath,
+            ));
+        }
+
+        return $scope;
     }
 
     private function buildIgnoreList(InputInterface $input): IgnoreList
