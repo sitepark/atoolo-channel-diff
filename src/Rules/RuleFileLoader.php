@@ -13,6 +13,8 @@ use Symfony\Component\Yaml\Yaml;
  *
  *     excludes:
  *       - '**.sources.*.static'
+ *     excludeResources:
+ *       - 'testseiten/only-here.php'
  *     floatPrecision: 7
  *
  * The file is parsed as data, never executed, since it lives next to the
@@ -24,6 +26,12 @@ final class RuleFileLoader
      * Highest precision that still makes sense for a double.
      */
     private const MAX_FLOAT_PRECISION = 15;
+
+    /**
+     * Keys a rule file may contain. Anything else is rejected rather than
+     * silently ignored, so a typo in a rule never passes as an applied rule.
+     */
+    private const SUPPORTED_KEYS = ['excludes', 'excludeResources', 'floatPrecision'];
 
     public function load(string $file): RuleSet
     {
@@ -56,7 +64,8 @@ final class RuleFileLoader
         $this->rejectUnknownKeys($file, $parsed);
 
         return new RuleSet(
-            $this->readExcludes($file, $parsed),
+            $this->readStringList($file, $parsed, 'excludes'),
+            $this->readStringList($file, $parsed, 'excludeResources'),
             $this->readFloatPrecision($file, $parsed),
             [$file],
         );
@@ -69,13 +78,14 @@ final class RuleFileLoader
     {
         $unknown = array_diff(
             array_keys($parsed),
-            ['excludes', 'floatPrecision'],
+            self::SUPPORTED_KEYS,
         );
         if ($unknown !== []) {
             throw new InvalidArgumentException(sprintf(
-                'Rule file "%s" contains unknown key(s): %s. Supported keys: excludes, floatPrecision.',
+                'Rule file "%s" contains unknown key(s): %s. Supported keys: %s.',
                 $file,
                 implode(', ', array_map(static fn(mixed $k): string => (string) $k, $unknown)),
+                implode(', ', self::SUPPORTED_KEYS),
             ));
         }
     }
@@ -84,28 +94,29 @@ final class RuleFileLoader
      * @param array<array-key, mixed> $parsed
      * @return list<string>
      */
-    private function readExcludes(string $file, array $parsed): array
+    private function readStringList(string $file, array $parsed, string $key): array
     {
-        // "??" also covers an explicitly empty "excludes:" key, which parses to null.
-        $excludes = $parsed['excludes'] ?? [];
-        if (!is_array($excludes)) {
+        // "??" also covers an explicitly empty key, which parses to null.
+        $entries = $parsed[$key] ?? [];
+        if (!is_array($entries)) {
             throw new InvalidArgumentException(
-                sprintf('Rule file "%s": "excludes" must be a list of field paths.', $file),
+                sprintf('Rule file "%s": "%s" must be a list of paths.', $file, $key),
             );
         }
 
         $result = [];
-        foreach ($excludes as $exclude) {
-            if (!is_string($exclude)) {
+        foreach ($entries as $entry) {
+            if (!is_string($entry)) {
                 throw new InvalidArgumentException(sprintf(
-                    'Rule file "%s": every entry of "excludes" must be a string, got %s.',
+                    'Rule file "%s": every entry of "%s" must be a string, got %s.',
                     $file,
-                    get_debug_type($exclude),
+                    $key,
+                    get_debug_type($entry),
                 ));
             }
-            $exclude = trim($exclude);
-            if ($exclude !== '') {
-                $result[] = $exclude;
+            $entry = trim($entry);
+            if ($entry !== '') {
+                $result[] = $entry;
             }
         }
 

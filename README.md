@@ -117,6 +117,7 @@ rejected.
 | `-f`, `--format=console\|json` | Output format (default: `console`). |
 | `-i`, `--ignore=<path>` | Additional dot-notation field path to ignore. Supports wildcards (see below). Repeatable. |
 | `--ignore-config=<file.php>` | PHP file returning a list of dot-notation field paths to ignore. |
+| `--exclude-resource=<path>` | Resource to leave out of the comparison entirely, together with its media. Supports wildcards (see below). Repeatable. |
 | `--rules=<file.yaml>` | Rule file with accepted differences. Overrides the automatic lookup (see below). |
 | `--no-rules` | Ignore any rule file found next to the channels. |
 | `--float-precision=<n>` | Number of decimal places at which two floats still count as equal. Overrides `floatPrecision` from the rule file. |
@@ -139,6 +140,11 @@ excludes:
   # The new publisher writes an explicit "static: false" per source.
   - '**.sources.*.static'
 
+excludeResources:
+  # The old publisher cannot build this page at all, so there is nothing to
+  # compare - see "Excluding whole resources" below.
+  - 'testseiten/aggregator-test.php'
+
 # Focalpoints are stored with 8 decimals, but the 8th digit is not always a
 # correct rounding of the previous value.
 floatPrecision: 7
@@ -156,6 +162,7 @@ ignore a discovered one for a single run.
 | Key | Meaning |
 | --- | --- |
 | `excludes` | List of dot-notation field paths to exclude, with the same wildcards as `--ignore` (see below). |
+| `excludeResources` | List of slash-notation resource paths to leave out of the comparison entirely, together with their media. See [Excluding whole resources](#excluding-whole-resources). |
 | `floatPrecision` | Number of decimal places at which two floats still count as equal. Omit it to compare floats strictly. |
 
 `floatPrecision: n` is applied as a tolerance of `0.5 × 10⁻ⁿ` rather than by
@@ -168,6 +175,59 @@ against an int or a numeric string stays a difference, since that is a type
 change rather than a precision issue.
 
 Rule files are parsed as data and never executed, unlike `--ignore-config`.
+
+### Excluding whole resources
+
+`excludes` drops a *field* out of a resource that is still compared.
+`excludeResources` is different in kind: it drops the *resource*, in both
+channels, so it is neither counted as identical nor reported as a difference.
+
+That is for the case where one channel cannot produce a page at all, and no
+field comparison is therefore possible — a publisher that does not know a class
+the other one uses, for instance, writes no page, and the page is one-sided by
+construction. Accepting that as a difference on every run would bury the real
+ones.
+
+```yaml
+excludeResources:
+  - 'testseiten/aggregator-test.php'
+```
+
+Paths are matched against the resource key the report shows, which is the path
+relative to the channel's resource directory:
+
+| Pattern | Meaning |
+| --- | --- |
+| `page.php` | exactly that resource |
+| `Aggregator-Test-*.php` | `*` matches within one path segment |
+| `page?.php` | `?` matches one character within a segment |
+| `testseiten/**` | `**` matches any number of segments, so the whole sub tree |
+| `**/index.php` | every `index.php`, at any depth — `**` also matches no segment at all |
+
+A pattern matches a whole key, not a prefix: `testseiten` alone does **not**
+cover `testseiten/page.php`; write `testseiten/**` for that.
+
+**Media follow their resource.** IES publishes a resource's media into a sidecar
+directory named after it, `<resource>.media/…`. Excluding a resource excludes
+those files too — otherwise every rendition of an excluded page would still be
+reported as one-sided. A pattern is matched against media keys directly as well,
+so `img/**` excludes a binary sub tree on its own.
+
+The report names every pattern with what it actually removed, and warns about
+one that removed nothing:
+
+```
+ * Excluded resource: testseiten/aggregator-test.php (1 resource, 5 media)
+ * Excluded resource: leftover/old.php (no match)
+```
+
+A rule that matches nothing hides nothing today, but it still hides the next
+difference that appears on that path — which is why it is worth removing rather
+than keeping "just in case". The summary reports `Resources excluded` and
+`Media excluded` as their own numbers, so the entries never disappear silently.
+
+`--exclude-resource=<path>` adds a pattern for a single run, on top of whatever
+the rule file says.
 
 ### Ignore path wildcards
 
@@ -263,6 +323,9 @@ return [
   differences; use `--strict-uuid-keys` to compare them by key instead.
 - Floats are compared strictly unless a `floatPrecision` is configured; see
   [Rule file](#rule-file-recording-accepted-differences).
+- A resource named by `excludeResources` is not compared at all, in either
+  channel, and neither are the media in its `.media` sidecar; see
+  [Excluding whole resources](#excluding-whole-resources).
 - PHP objects (e.g. `stdClass`) are compared structurally, not by instance.
 - Closures (e.g. from "code" content sections) are compared by their source
   code, not by instance.

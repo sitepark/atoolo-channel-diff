@@ -43,7 +43,7 @@ final class DiffCommandTest extends TestCase
      * Rule-file discovery walks up to the filesystem root, so it is switched off
      * by default here; the rule tests pass their own file explicitly.
      *
-     * @param array<string, string|bool> $extra
+     * @param array<string, string|bool|list<string>> $extra
      */
     private function diff(?string $subPath, array $extra = []): CommandTester
     {
@@ -214,6 +214,63 @@ final class DiffCommandTest extends TestCase
 
         self::assertStringNotContainsString('Rules:', $tester->getDisplay());
         self::assertStringContainsString('base.title', $tester->getDisplay());
+    }
+
+    public function testExcludeResourceDropsThePageAndItsMedia(): void
+    {
+        $tester = $this->diff(null, [
+            '--exclude-resource' => ['only-b.php'],
+        ]);
+
+        $display = $tester->getDisplay();
+        self::assertStringContainsString('Excluded resource: only-b.php', $display);
+        self::assertStringContainsString('1 resource, 1 media', $display);
+        self::assertStringNotContainsString('only-b.php.media', $display);
+        self::assertStringContainsString('Resources excluded', $display);
+    }
+
+    public function testExcludeResourceIsShownInTheJsonReport(): void
+    {
+        $tester = $this->diff(null, [
+            '--exclude-resource' => ['only-b.php'],
+            '--format' => 'json',
+        ]);
+
+        $decoded = json_decode($tester->getDisplay(), true);
+
+        self::assertIsArray($decoded);
+        self::assertSame(
+            [['pattern' => 'only-b.php', 'resources' => 1, 'media' => 1]],
+            $decoded['rules']['excludeResources'],
+        );
+        self::assertSame(1, $decoded['stats']['resources']['excluded']);
+        self::assertSame(1, $decoded['stats']['media']['excluded']);
+    }
+
+    public function testAnExclusionThatMatchesNothingIsWarnedAbout(): void
+    {
+        $tester = $this->diff(null, [
+            '--exclude-resource' => ['never-published.php'],
+        ]);
+
+        $display = $tester->getDisplay();
+        self::assertStringContainsString('no match', $display);
+        self::assertStringContainsString('matched nothing', $display);
+    }
+
+    public function testExcludeResourceWorksAlongsideARuleFile(): void
+    {
+        // --no-rules only switches off the discovered file; an exclusion given
+        // on the command line is a rule of its own and still applies.
+        $tester = $this->diff(null, [
+            '--rules' => self::FIXTURES . '/rules/channel-fixtures.yaml',
+            '--exclude-resource' => ['only-b.php'],
+        ]);
+
+        $display = $tester->getDisplay();
+        self::assertStringContainsString('channel-fixtures.yaml', $display);
+        self::assertStringContainsString('Excluded resource: only-b.php', $display);
+        self::assertStringNotContainsString('base.title', $display);
     }
 
     public function testSubPathPresentInOnlyOneChannelIsNotAnError(): void

@@ -7,6 +7,7 @@ namespace Atoolo\ChannelDiff\Report;
 use Atoolo\ChannelDiff\Diff\ChangeType;
 use Atoolo\ChannelDiff\Diff\DiffReport;
 use Atoolo\ChannelDiff\Diff\EntryStatus;
+use Atoolo\ChannelDiff\Diff\ExclusionStat;
 use Atoolo\ChannelDiff\Diff\FieldDiff;
 use Atoolo\ChannelDiff\Diff\MediaDiff;
 use Atoolo\ChannelDiff\Diff\ResourceDiff;
@@ -38,6 +39,13 @@ final class ConsoleReportRenderer
             $lines[] = sprintf(
                 'Float precision: %d decimal places',
                 $report->rules->floatPrecision,
+            );
+        }
+        foreach ($report->exclusionStats as $stat) {
+            $lines[] = sprintf(
+                'Excluded resource: %s <fg=gray>(%s)</>',
+                $stat->pattern,
+                $this->exclusionEffect($stat),
             );
         }
         $io->listing($lines);
@@ -142,6 +150,27 @@ final class ConsoleReportRenderer
         }
     }
 
+    /**
+     * What one exclusion pattern took out of this run, phrased so that a rule
+     * which no longer matches anything is visible at a glance.
+     */
+    private function exclusionEffect(ExclusionStat $stat): string
+    {
+        if ($stat->isUnused()) {
+            return 'no match';
+        }
+
+        $parts = [];
+        if ($stat->resources > 0) {
+            $parts[] = sprintf('%d resource%s', $stat->resources, $stat->resources === 1 ? '' : 's');
+        }
+        if ($stat->media > 0) {
+            $parts[] = sprintf('%d media', $stat->media);
+        }
+
+        return implode(', ', $parts);
+    }
+
     private function renderSummary(DiffReport $report, SymfonyStyle $io): void
     {
         $io->section('Summary');
@@ -152,13 +181,30 @@ final class ConsoleReportRenderer
             ['Resources identical', (string) $report->resourcesIdentical],
             ['Resources differing', (string) count($report->resourceDiffs)],
         ];
+        if ($report->resourcesExcluded > 0) {
+            $rows[] = ['Resources excluded', (string) $report->resourcesExcluded];
+        }
         if ($report->mediaCompared) {
             $rows[] = ['Media A', (string) $report->totalMediaA];
             $rows[] = ['Media B', (string) $report->totalMediaB];
             $rows[] = ['Media identical', (string) $report->mediaIdentical];
             $rows[] = ['Media differing', (string) count($report->mediaDiffs)];
+            if ($report->mediaExcluded > 0) {
+                $rows[] = ['Media excluded', (string) $report->mediaExcluded];
+            }
         }
         $io->table(['Metric', 'Count'], $rows);
+
+        $unused = $report->unusedExclusions();
+        if ($unused !== []) {
+            $io->warning(sprintf(
+                "These resource exclusions matched nothing and can be removed:\n%s",
+                implode("\n", array_map(
+                    static fn(ExclusionStat $stat): string => '  ' . $stat->pattern,
+                    $unused,
+                )),
+            ));
+        }
 
         if ($report->hasDifferences()) {
             $io->warning('Channels differ.');

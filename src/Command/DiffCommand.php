@@ -51,6 +51,7 @@ final class DiffCommand extends Command
             ->addOption('format', 'f', InputOption::VALUE_REQUIRED, 'Output format: console or json.', self::FORMAT_CONSOLE)
             ->addOption('ignore', 'i', InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Additional dot-notation field path to ignore (repeatable).')
             ->addOption('ignore-config', null, InputOption::VALUE_REQUIRED, 'PHP file returning a list of dot-notation field paths to ignore.')
+            ->addOption('exclude-resource', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'Resource path to leave out of the comparison entirely, together with its media (wildcards allowed, repeatable).')
             ->addOption('rules', null, InputOption::VALUE_REQUIRED, 'Rule file (YAML) with accepted differences. By default the nearest "' . RuleFileLocator::FILE_NAMES[0] . '" at or above either channel base directory is used.')
             ->addOption('no-rules', null, InputOption::VALUE_NONE, 'Ignore any rule file found next to the channels.')
             ->addOption('float-precision', null, InputOption::VALUE_REQUIRED, 'Number of decimal places at which two floats still count as equal (overrides the rule file).')
@@ -77,10 +78,19 @@ final class DiffCommand extends Command
                 . 'above both channels covers both):' . PHP_EOL . PHP_EOL
                 . '    excludes:' . PHP_EOL
                 . '      - \'**.sources.*.static\'' . PHP_EOL
+                . '    excludeResources:' . PHP_EOL
+                . '      - \'testseiten/only-one-channel-can-build-this.php\'' . PHP_EOL
                 . '    floatPrecision: 7' . PHP_EOL . PHP_EOL
                 . '"excludes" uses the same field paths and wildcards as --ignore. '
                 . '"floatPrecision" is the number of decimal places at which two '
                 . 'floats still count as equal.' . PHP_EOL . PHP_EOL
+                . '"excludeResources" is different in kind: it names whole resources '
+                . 'by their slash-separated path, and a matched resource drops out of '
+                . 'the comparison altogether - along with the media in its '
+                . '".media" sidecar directory. Use it where one channel cannot '
+                . 'produce a page at all, so there is nothing to compare rather than '
+                . 'a difference to accept. The report lists each pattern with what it '
+                . 'removed, and warns about one that matched nothing.' . PHP_EOL . PHP_EOL
                 . 'Exit code 0 = identical, 1 = differences found, 2 = error.',
             );
     }
@@ -180,6 +190,12 @@ final class DiffCommand extends Command
             foreach ($files as $file) {
                 $rules = $rules->merge($this->ruleFileLoader->load($file));
             }
+        }
+
+        /** @var list<string> $excludeResources */
+        $excludeResources = $input->getOption('exclude-resource');
+        if ($excludeResources !== []) {
+            $rules = $rules->merge(new RuleSet(excludeResources: $excludeResources));
         }
 
         $precision = $input->getOption('float-precision');

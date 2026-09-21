@@ -17,6 +17,7 @@ final class RuleSetTest extends TestCase
 
         self::assertTrue($rules->isEmpty());
         self::assertSame([], $rules->excludes);
+        self::assertSame([], $rules->excludeResources);
         self::assertNull($rules->floatPrecision);
         self::assertNull($rules->floatTolerance());
     }
@@ -24,6 +25,7 @@ final class RuleSetTest extends TestCase
     public function testExcludesAloneMakeItNonEmpty(): void
     {
         self::assertFalse((new RuleSet(['a.b']))->isEmpty());
+        self::assertFalse((new RuleSet(excludeResources: ['page.php']))->isEmpty());
         self::assertFalse((new RuleSet(floatPrecision: 7))->isEmpty());
     }
 
@@ -32,6 +34,14 @@ final class RuleSetTest extends TestCase
         $merged = (new RuleSet(['a.b', 'c.d']))->merge(new RuleSet(['c.d', 'e.f']));
 
         self::assertSame(['a.b', 'c.d', 'e.f'], $merged->excludes);
+    }
+
+    public function testMergeAccumulatesResourceExclusionsWithoutDuplicates(): void
+    {
+        $merged = (new RuleSet(excludeResources: ['a.php', 'b.php']))
+            ->merge(new RuleSet(excludeResources: ['b.php', 'c.php']));
+
+        self::assertSame(['a.php', 'b.php', 'c.php'], $merged->excludeResources);
     }
 
     public function testMergeLetsTheLaterFloatPrecisionWin(): void
