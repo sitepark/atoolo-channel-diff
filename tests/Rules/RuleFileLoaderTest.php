@@ -102,6 +102,40 @@ final class RuleFileLoaderTest extends TestCase
         $this->loader->load($this->file('excludes-non-string.yaml'));
     }
 
+    public function testLoadsResourceExclusions(): void
+    {
+        $rules = $this->loader->load($this->file('exclude-resources.yaml'));
+
+        self::assertSame(['base.title'], $rules->excludes);
+        self::assertSame(
+            ['testseiten/only-in-one-channel.php', 'generated/**'],
+            $rules->excludeResources,
+        );
+    }
+
+    public function testResourceExclusionsMayBeOmitted(): void
+    {
+        $rules = $this->loader->load($this->file('valid.yaml'));
+
+        self::assertSame([], $rules->excludeResources);
+    }
+
+    public function testResourceExclusionEntriesMustBeStrings(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('every entry of "excludeResources" must be a string, got int');
+
+        $this->loader->load($this->file('exclude-resources-non-string.yaml'));
+    }
+
+    public function testTheErrorForAnUnknownKeyNamesEverySupportedKey(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('excludes, excludeResources, floatPrecision');
+
+        $this->loader->load($this->file('unknown-key.yaml'));
+    }
+
     public function testFloatPrecisionMustBeAnInteger(): void
     {
         $this->expectException(InvalidArgumentException::class);

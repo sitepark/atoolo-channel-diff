@@ -6,6 +6,7 @@ namespace Atoolo\ChannelDiff\Report;
 
 use Atoolo\ChannelDiff\Diff\ChangeType;
 use Atoolo\ChannelDiff\Diff\DiffReport;
+use Atoolo\ChannelDiff\Diff\ExclusionStat;
 use Atoolo\ChannelDiff\Diff\FieldDiff;
 use Atoolo\ChannelDiff\Diff\MediaDiff;
 use Atoolo\ChannelDiff\Diff\ResourceDiff;
@@ -28,6 +29,10 @@ final class JsonReportRenderer
             'rules' => [
                 'sources' => $report->rules->sources,
                 'excludes' => $report->rules->excludes,
+                'excludeResources' => array_map(
+                    $this->exclusion(...),
+                    $report->exclusionStats,
+                ),
                 'floatPrecision' => $report->rules->floatPrecision,
             ],
             'stats' => [
@@ -36,6 +41,7 @@ final class JsonReportRenderer
                     'totalB' => $report->totalResourcesB,
                     'identical' => $report->resourcesIdentical,
                     'differing' => count($report->resourceDiffs),
+                    'excluded' => $report->resourcesExcluded,
                 ],
                 'media' => [
                     'compared' => $report->mediaCompared,
@@ -43,6 +49,7 @@ final class JsonReportRenderer
                     'totalB' => $report->totalMediaB,
                     'identical' => $report->mediaIdentical,
                     'differing' => count($report->mediaDiffs),
+                    'excluded' => $report->mediaExcluded,
                 ],
             ],
             'resources' => array_map($this->resource(...), $report->resourceDiffs),
@@ -71,6 +78,21 @@ final class JsonReportRenderer
             'layout' => $channel->layout->value,
             'locale' => $channel->locale,
             'resourcePathType' => $channel->resourcePathType,
+        ];
+    }
+
+    /**
+     * A pattern plus what it removed, so a consumer can spot a rule that no
+     * longer matches anything without re-running the comparison.
+     *
+     * @return array<string, mixed>
+     */
+    private function exclusion(ExclusionStat $stat): array
+    {
+        return [
+            'pattern' => $stat->pattern,
+            'resources' => $stat->resources,
+            'media' => $stat->media,
         ];
     }
 

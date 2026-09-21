@@ -77,9 +77,9 @@ final class ChannelDifferTest extends TestCase
         $report = $this->buildReport();
 
         self::assertSame(3, $report->totalMediaA);
-        self::assertSame(2, $report->totalMediaB);
+        self::assertSame(3, $report->totalMediaB);
         self::assertSame(1, $report->mediaIdentical);
-        self::assertCount(2, $report->mediaDiffs);
+        self::assertCount(3, $report->mediaDiffs);
 
         $byKey = [];
         foreach ($report->mediaDiffs as $diff) {
@@ -87,6 +87,10 @@ final class ChannelDifferTest extends TestCase
         }
         self::assertSame(EntryStatus::CHANGED, $byKey['diff.bin']->status);
         self::assertSame(EntryStatus::ONLY_IN_A, $byKey['only-a.bin']->status);
+        self::assertSame(
+            EntryStatus::ONLY_IN_B,
+            $byKey['only-b.php.media/41068/rendition.bin']->status,
+        );
         self::assertNotSame($byKey['diff.bin']->hashA, $byKey['diff.bin']->hashB);
     }
 
@@ -124,9 +128,9 @@ final class ChannelDifferTest extends TestCase
         self::assertSame([], $report->resourceDiffs);
 
         self::assertSame(3, $report->totalMediaA);
-        self::assertSame(2, $report->totalMediaB);
+        self::assertSame(3, $report->totalMediaB);
         self::assertSame(1, $report->mediaIdentical);
-        self::assertCount(2, $report->mediaDiffs);
+        self::assertCount(3, $report->mediaDiffs);
     }
 
     public function testSubPathIsReportedInTheReport(): void
@@ -172,6 +176,91 @@ final class ChannelDifferTest extends TestCase
             array_map(static fn($f) => $f->path, $page->fieldDiffs),
         );
         self::assertSame($report->rules->floatPrecision, 7);
+    }
+
+    /**
+     * The case the rule exists for: a page only one channel can build at all.
+     * Excluding it has to take its media with it, otherwise every rendition
+     * stays behind as a one-sided difference.
+     */
+    public function testAnExcludedResourceTakesItsMediaWithIt(): void
+    {
+        $report = $this->buildReport(rules: new RuleSet(
+            excludeResources: ['only-b.php'],
+        ));
+
+        $keys = array_map(static fn($d) => $d->key, $report->resourceDiffs);
+        self::assertNotContains('only-b.php', $keys);
+
+        $mediaKeys = array_map(static fn($d) => $d->key, $report->mediaDiffs);
+        self::assertNotContains('only-b.php.media/41068/rendition.bin', $mediaKeys);
+
+        self::assertSame(1, $report->resourcesExcluded);
+        self::assertSame(1, $report->mediaExcluded);
+    }
+
+    /**
+     * An excluded resource is not compared, so it counts as neither identical
+     * nor differing - and it must not inflate the totals either, or the
+     * numbers in the summary would no longer add up.
+     */
+    public function testExcludedEntriesLeaveTheTotals(): void
+    {
+        $report = $this->buildReport(rules: new RuleSet(
+            excludeResources: ['only-b.php'],
+        ));
+
+        self::assertSame(3, $report->totalResourcesA);
+        self::assertSame(2, $report->totalResourcesB);
+        self::assertSame(1, $report->resourcesIdentical);
+        self::assertCount(2, $report->resourceDiffs);
+
+        self::assertSame(3, $report->totalMediaA);
+        self::assertSame(2, $report->totalMediaB);
+        self::assertCount(2, $report->mediaDiffs);
+    }
+
+    public function testExcludingEveryDifferenceMakesTheChannelsEqual(): void
+    {
+        $report = $this->buildReport(rules: new RuleSet(
+            excludes: ['base.title', 'base.addedField', 'base.removedField'],
+            excludeResources: ['only-a.php', 'only-b.php', 'only-a.bin', 'diff.bin'],
+            floatPrecision: 7,
+        ));
+
+        self::assertFalse($report->hasDifferences());
+    }
+
+    public function testEachExclusionPatternReportsWhatItRemoved(): void
+    {
+        $report = $this->buildReport(rules: new RuleSet(
+            excludeResources: ['only-b.php', 'never-published.php'],
+        ));
+
+        $stats = [];
+        foreach ($report->exclusionStats as $stat) {
+            $stats[$stat->pattern] = [$stat->resources, $stat->media];
+        }
+
+        self::assertSame(['only-b.php' => [1, 1], 'never-published.php' => [0, 0]], $stats);
+    }
+
+    /**
+     * A rule that no longer hides anything still hides the next difference on
+     * that path, so the report has to name it.
+     */
+    public function testAnExclusionThatMatchesNothingIsReportedAsUnused(): void
+    {
+        $report = $this->buildReport(rules: new RuleSet(
+            excludeResources: ['only-b.php', 'never-published.php'],
+        ));
+
+        $unused = array_map(
+            static fn($stat) => $stat->pattern,
+            $report->unusedExclusions(),
+        );
+
+        self::assertSame(['never-published.php'], $unused);
     }
 
     public function testFloatPrecisionTooHighKeepsTheDifference(): void

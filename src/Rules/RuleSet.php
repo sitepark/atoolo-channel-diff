@@ -6,7 +6,8 @@ namespace Atoolo\ChannelDiff\Rules;
 
 /**
  * Accepted differences, in generalized form: field paths that should not be
- * reported, and the precision at which floats still count as equal.
+ * reported, whole resources that should not be compared at all, and the
+ * precision at which floats still count as equal.
  *
  * Rules are collected from rule files next to the compared channels and from
  * the command line, then merged into a single set.
@@ -15,6 +16,9 @@ final class RuleSet
 {
     /**
      * @param list<string> $excludes dot-notation field paths (wildcards allowed)
+     * @param list<string> $excludeResources slash-notation resource paths
+     *        (wildcards allowed); a matched resource is left out of the
+     *        comparison entirely, together with its media
      * @param int|null $floatPrecision number of decimal places at which two
      *        floats still count as equal; null keeps the strict comparison
      * @param list<string> $sources rule files this set was built from, for
@@ -22,13 +26,16 @@ final class RuleSet
      */
     public function __construct(
         public readonly array $excludes = [],
+        public readonly array $excludeResources = [],
         public readonly ?int $floatPrecision = null,
         public readonly array $sources = [],
     ) {}
 
     public function isEmpty(): bool
     {
-        return $this->excludes === [] && $this->floatPrecision === null;
+        return $this->excludes === []
+            && $this->excludeResources === []
+            && $this->floatPrecision === null;
     }
 
     /**
@@ -40,6 +47,7 @@ final class RuleSet
     {
         return new self(
             array_values(array_unique([...$this->excludes, ...$other->excludes])),
+            array_values(array_unique([...$this->excludeResources, ...$other->excludeResources])),
             $other->floatPrecision ?? $this->floatPrecision,
             array_values(array_unique([...$this->sources, ...$other->sources])),
         );

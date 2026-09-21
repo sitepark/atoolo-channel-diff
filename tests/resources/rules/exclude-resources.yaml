@@ -1,0 +1,6 @@
+# Accepted differences, including a page one channel cannot build at all.
+excludes:
+  - 'base.title'
+excludeResources:
+  - 'testseiten/only-in-one-channel.php'
+  - 'generated/**'
