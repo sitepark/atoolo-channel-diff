@@ -34,6 +34,7 @@ final class JsonReportRenderer
                     $report->exclusionStats,
                 ),
                 'floatPrecision' => $report->rules->floatPrecision,
+                'numericStringsEqualNumbers' => $report->rules->numericStringsEqualNumbers,
             ],
             'stats' => [
                 'resources' => [

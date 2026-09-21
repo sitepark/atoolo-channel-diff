@@ -481,6 +481,135 @@ final class ArrayDifferTest extends TestCase
         self::assertSame([], $diffs);
     }
 
+    public function testNumericStringEqualsTheSameIntWhenEnabled(): void
+    {
+        $diffs = $this->differ->diff(
+            ['model' => ['height' => '600']],
+            ['model' => ['height' => 600]],
+            new IgnoreList([]),
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertSame([], $diffs);
+    }
+
+    public function testNumericStringAndNumberDifferWhileDisabled(): void
+    {
+        $diffs = $this->differ->diff(
+            ['model' => ['height' => '600']],
+            ['model' => ['height' => 600]],
+            new IgnoreList([]),
+        );
+
+        self::assertCount(1, $diffs);
+        self::assertSame('model.height', $diffs[0]->path);
+    }
+
+    /**
+     * The rule accepts a notation change, never a value change - that is what
+     * separates it from an exclude.
+     */
+    public function testADifferentNumberStillDiffersWithNumericStrings(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => '600'],
+            ['x' => 601],
+            new IgnoreList([]),
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    /**
+     * Against an int only the exact decimal form counts: casting both sides
+     * would lose precision above 2^53 and could call two different ids equal.
+     */
+    public function testExponentialNotationDoesNotEqualAnInt(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => '1e3'],
+            ['x' => 1000],
+            new IgnoreList([]),
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    public function testTwoLongIdsThatOnlyAgreeAsFloatsStillDiffer(): void
+    {
+        $diffs = $this->differ->diff(
+            ['id' => '100560100000001211'],
+            ['id' => 100560100000001212],
+            new IgnoreList([]),
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    public function testNonNumericStringAgainstANumberStillDiffers(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => '600px'],
+            ['x' => 600],
+            new IgnoreList([]),
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    public function testTwoStringsAreUnaffectedByNumericStrings(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => '600'],
+            ['x' => '600.0'],
+            new IgnoreList([]),
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    public function testABoolIsNotANumberForNumericStrings(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => '1'],
+            ['x' => true],
+            new IgnoreList([]),
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    public function testNumericStringAgainstAFloatUsesTheTolerance(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => '0.40263157894737'],
+            ['x' => 0.40263158],
+            new IgnoreList([]),
+            floatTolerance: 5.0e-8,
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertSame([], $diffs);
+    }
+
+    public function testNumericStringAgainstAFloatIsStrictWithoutATolerance(): void
+    {
+        $diffs = $this->differ->diff(
+            ['x' => '0.40263157894737'],
+            ['x' => 0.40263158],
+            new IgnoreList([]),
+            numericStringsEqualNumbers: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
     public function testToleranceIsUsedWhenMatchingNormalizedEntriesByContent(): void
     {
         $diffs = $this->differ->diff(

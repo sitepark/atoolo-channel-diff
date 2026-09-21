@@ -131,9 +131,35 @@ final class RuleFileLoaderTest extends TestCase
     public function testTheErrorForAnUnknownKeyNamesEverySupportedKey(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('excludes, excludeResources, floatPrecision');
+        $this->expectExceptionMessage(
+            'excludes, excludeResources, floatPrecision, numericStringsEqualNumbers',
+        );
 
         $this->loader->load($this->file('unknown-key.yaml'));
+    }
+
+    public function testLoadsNumericStringsEqualNumbers(): void
+    {
+        $rules = $this->loader->load($this->file('numeric-strings.yaml'));
+
+        self::assertTrue($rules->numericStringsEqualNumbers);
+    }
+
+    public function testNumericStringsEqualNumbersDefaultsToFalse(): void
+    {
+        $rules = $this->loader->load($this->file('valid.yaml'));
+
+        self::assertFalse($rules->numericStringsEqualNumbers);
+    }
+
+    public function testNumericStringsEqualNumbersMustBeABool(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            '"numericStringsEqualNumbers" must be true or false, got string',
+        );
+
+        $this->loader->load($this->file('numeric-strings-not-bool.yaml'));
     }
 
     public function testFloatPrecisionMustBeAnInteger(): void

@@ -23,25 +23,36 @@ final class RuleSet
      *        floats still count as equal; null keeps the strict comparison
      * @param list<string> $sources rule files this set was built from, for
      *        reporting which rules were in effect
+     * @param bool $numericStringsEqualNumbers when true, a numeric string and
+     *        the same number count as equal ("600" == 600). Unlike an exclude
+     *        this blinds no field: a value that really changed is still
+     *        reported, only the notation may differ. Off by default, because
+     *        a type change is worth seeing until someone has decided it.
      */
     public function __construct(
         public readonly array $excludes = [],
         public readonly array $excludeResources = [],
         public readonly ?int $floatPrecision = null,
         public readonly array $sources = [],
+        public readonly bool $numericStringsEqualNumbers = false,
     ) {}
 
     public function isEmpty(): bool
     {
         return $this->excludes === []
             && $this->excludeResources === []
-            && $this->floatPrecision === null;
+            && $this->floatPrecision === null
+            && !$this->numericStringsEqualNumbers;
     }
 
     /**
      * Merges $other on top of this set: excludes accumulate, a float precision
      * in $other wins. Callers therefore pass the more specific set last (rule
      * file first, command line afterwards).
+     *
+     * numericStringsEqualNumbers accumulates rather than being overwritten,
+     * so that a set carrying only another rule - as the command line builds
+     * one per option - does not silently switch it off again.
      */
     public function merge(self $other): self
     {
@@ -50,6 +61,7 @@ final class RuleSet
             array_values(array_unique([...$this->excludeResources, ...$other->excludeResources])),
             $other->floatPrecision ?? $this->floatPrecision,
             array_values(array_unique([...$this->sources, ...$other->sources])),
+            $this->numericStringsEqualNumbers || $other->numericStringsEqualNumbers,
         );
     }
 

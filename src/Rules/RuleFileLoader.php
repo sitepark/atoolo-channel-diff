@@ -16,6 +16,7 @@ use Symfony\Component\Yaml\Yaml;
  *     excludeResources:
  *       - 'testseiten/only-here.php'
  *     floatPrecision: 7
+ *     numericStringsEqualNumbers: true
  *
  * The file is parsed as data, never executed, since it lives next to the
  * publication channels rather than in this project.
@@ -31,7 +32,12 @@ final class RuleFileLoader
      * Keys a rule file may contain. Anything else is rejected rather than
      * silently ignored, so a typo in a rule never passes as an applied rule.
      */
-    private const SUPPORTED_KEYS = ['excludes', 'excludeResources', 'floatPrecision'];
+    private const SUPPORTED_KEYS = [
+        'excludes',
+        'excludeResources',
+        'floatPrecision',
+        'numericStringsEqualNumbers',
+    ];
 
     public function load(string $file): RuleSet
     {
@@ -68,6 +74,7 @@ final class RuleFileLoader
             $this->readStringList($file, $parsed, 'excludeResources'),
             $this->readFloatPrecision($file, $parsed),
             [$file],
+            $this->readBool($file, $parsed, 'numericStringsEqualNumbers'),
         );
     }
 
@@ -121,6 +128,24 @@ final class RuleFileLoader
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<array-key, mixed> $parsed
+     */
+    private function readBool(string $file, array $parsed, string $key): bool
+    {
+        $value = $parsed[$key] ?? false;
+        if (!is_bool($value)) {
+            throw new InvalidArgumentException(sprintf(
+                'Rule file "%s": "%s" must be true or false, got %s.',
+                $file,
+                $key,
+                get_debug_type($value),
+            ));
+        }
+
+        return $value;
     }
 
     /**

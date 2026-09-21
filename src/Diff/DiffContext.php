@@ -17,5 +17,6 @@ final class DiffContext
         public readonly bool $emptyArrayEqualsMissing,
         public readonly bool $normalizeUuidKeys = true,
         public readonly ?float $floatTolerance = null,
+        public readonly bool $numericStringsEqualNumbers = false,
     ) {}
 }

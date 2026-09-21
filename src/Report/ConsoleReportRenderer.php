@@ -41,6 +41,9 @@ final class ConsoleReportRenderer
                 $report->rules->floatPrecision,
             );
         }
+        if ($report->rules->numericStringsEqualNumbers) {
+            $lines[] = 'Numeric strings: equal to the same number';
+        }
         foreach ($report->exclusionStats as $stat) {
             $lines[] = sprintf(
                 'Excluded resource: %s <fg=gray>(%s)</>',

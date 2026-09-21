@@ -60,6 +60,7 @@ final class DiffCommand extends Command
             ->addOption('strict-empty-string', null, InputOption::VALUE_NONE, 'Treat an empty-string field and a missing field as different (by default they are equal).')
             ->addOption('strict-empty-array', null, InputOption::VALUE_NONE, 'Treat an empty-array field and a missing field as different (by default they are equal).')
             ->addOption('strict-uuid-keys', null, InputOption::VALUE_NONE, 'Treat UUID array keys as significant (by default arrays keyed by UUIDs are matched by content, ignoring the volatile keys).')
+            ->addOption('numeric-strings', null, InputOption::VALUE_NONE, 'Treat a numeric string and the same number as equal ("600" = 600). Off by default.')
             ->setHelp(
                 'Compares two IES publication channels by matching resources and '
                 . 'media on their relative file path. Resource PHP files are compared '
@@ -80,10 +81,17 @@ final class DiffCommand extends Command
                 . '      - \'**.sources.*.static\'' . PHP_EOL
                 . '    excludeResources:' . PHP_EOL
                 . '      - \'testseiten/only-one-channel-can-build-this.php\'' . PHP_EOL
-                . '    floatPrecision: 7' . PHP_EOL . PHP_EOL
+                . '    floatPrecision: 7' . PHP_EOL
+                . '    numericStringsEqualNumbers: true' . PHP_EOL . PHP_EOL
                 . '"excludes" uses the same field paths and wildcards as --ignore. '
                 . '"floatPrecision" is the number of decimal places at which two '
                 . 'floats still count as equal.' . PHP_EOL . PHP_EOL
+                . '"numericStringsEqualNumbers" accepts a notation change where one '
+                . 'channel writes a number as a string and the other as a number '
+                . '("600" and 600). It differs from an exclude in kind: no field '
+                . 'is blinded, a value that really changed is still reported. Only '
+                . 'the exact decimal form of an integer counts, so "1e3" and 1000 '
+                . 'remain different.' . PHP_EOL . PHP_EOL
                 . '"excludeResources" is different in kind: it names whole resources '
                 . 'by their slash-separated path, and a matched resource drops out of '
                 . 'the comparison altogether - along with the media in its '
@@ -196,6 +204,10 @@ final class DiffCommand extends Command
         $excludeResources = $input->getOption('exclude-resource');
         if ($excludeResources !== []) {
             $rules = $rules->merge(new RuleSet(excludeResources: $excludeResources));
+        }
+
+        if ($input->getOption('numeric-strings') === true) {
+            $rules = $rules->merge(new RuleSet(numericStringsEqualNumbers: true));
         }
 
         $precision = $input->getOption('float-precision');

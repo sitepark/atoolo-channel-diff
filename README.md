@@ -121,6 +121,7 @@ rejected.
 | `--rules=<file.yaml>` | Rule file with accepted differences. Overrides the automatic lookup (see below). |
 | `--no-rules` | Ignore any rule file found next to the channels. |
 | `--float-precision=<n>` | Number of decimal places at which two floats still count as equal. Overrides `floatPrecision` from the rule file. |
+| `--numeric-strings` | Treat a numeric string and the same number as equal (`"600"` and `600`). Off by default; also available as `numericStringsEqualNumbers` in the rule file. |
 | `--no-media` | Skip the binary media comparison. |
 | `--strict-null` | Treat a null field and a missing field as different. By default, a field that is `null` in one channel and absent in the other is considered equal. |
 | `--strict-empty-string` | Treat an empty-string field and a missing field as different. By default, a field that is `""` in one channel and absent in the other is considered equal. |
@@ -148,6 +149,9 @@ excludeResources:
 # Focalpoints are stored with 8 decimals, but the 8th digit is not always a
 # correct rounding of the previous value.
 floatPrecision: 7
+
+# One channel writes a height as "600", the other as 600.
+numericStringsEqualNumbers: true
 ```
 
 The file is looked up from each channel's base directory **upwards**, so a single
@@ -164,6 +168,7 @@ ignore a discovered one for a single run.
 | `excludes` | List of dot-notation field paths to exclude, with the same wildcards as `--ignore` (see below). |
 | `excludeResources` | List of slash-notation resource paths to leave out of the comparison entirely, together with their media. See [Excluding whole resources](#excluding-whole-resources). |
 | `floatPrecision` | Number of decimal places at which two floats still count as equal. Omit it to compare floats strictly. |
+| `numericStringsEqualNumbers` | `true` accepts a number written as a string on one side and as a number on the other. Omit it, or set `false`, to keep the strict comparison. |
 
 `floatPrecision: n` is applied as a tolerance of `0.5 × 10⁻ⁿ` rather than by
 rounding both sides, so two values that happen to straddle a rounding boundary
@@ -173,6 +178,22 @@ decimals whose last digit is not a faithful rounding of the original need
 `floatPrecision: 7`. Only float-to-float pairs use the tolerance — a float
 against an int or a numeric string stays a difference, since that is a type
 change rather than a precision issue.
+
+`numericStringsEqualNumbers: true` is what accepts that last case, where it has
+been reviewed and decided. It is **not** an exclude and differs from one in
+kind: no field is blinded, so a value that really changed is still reported —
+only the notation may differ. It is deliberately narrow. Against an integer
+only the exact decimal form counts: `"600"` equals `600`, while `"1e3"` does
+not equal `1000`, because casting both sides would lose precision above 2⁵³ and
+could call two different ids equal. Against a float the configured
+`floatPrecision` tolerance applies, since such a pair is a precision question
+as well as a notation one. Two strings are never compared this way.
+
+Reach for it where two publishers disagree about notation rather than value,
+and where the consumer does not care — typically because it declares the type
+it wants. Prefer it to an `excludes` entry in that case: an exclude takes the
+field's value *and* its presence out of the comparison for good, and is a trap
+for the next real defect on that path.
 
 Rule files are parsed as data and never executed, unlike `--ignore-config`.
 
@@ -322,6 +343,9 @@ return [
   the content of their values by default, so the changing keys do not show up as
   differences; use `--strict-uuid-keys` to compare them by key instead.
 - Floats are compared strictly unless a `floatPrecision` is configured; see
+  [Rule file](#rule-file-recording-accepted-differences).
+- A numeric string and the same number (`"600"` and `600`) count as different
+  unless `numericStringsEqualNumbers` is set; see
   [Rule file](#rule-file-recording-accepted-differences).
 - A resource named by `excludeResources` is not compared at all, in either
   channel, and neither are the media in its `.media` sidecar; see

@@ -20,6 +20,7 @@ final class RuleSetTest extends TestCase
         self::assertSame([], $rules->excludeResources);
         self::assertNull($rules->floatPrecision);
         self::assertNull($rules->floatTolerance());
+        self::assertFalse($rules->numericStringsEqualNumbers);
     }
 
     public function testExcludesAloneMakeItNonEmpty(): void
@@ -27,6 +28,24 @@ final class RuleSetTest extends TestCase
         self::assertFalse((new RuleSet(['a.b']))->isEmpty());
         self::assertFalse((new RuleSet(excludeResources: ['page.php']))->isEmpty());
         self::assertFalse((new RuleSet(floatPrecision: 7))->isEmpty());
+        self::assertFalse((new RuleSet(numericStringsEqualNumbers: true))->isEmpty());
+    }
+
+    /**
+     * The command line builds one set per option and merges them, so a set
+     * carrying only another rule must not switch this one off again.
+     */
+    public function testMergeKeepsNumericStringsOnceAnySetEnabledIt(): void
+    {
+        $merged = (new RuleSet(numericStringsEqualNumbers: true))
+            ->merge(new RuleSet(['a.b']));
+
+        self::assertTrue($merged->numericStringsEqualNumbers);
+
+        $other = (new RuleSet(['a.b']))
+            ->merge(new RuleSet(numericStringsEqualNumbers: true));
+
+        self::assertTrue($other->numericStringsEqualNumbers);
     }
 
     public function testMergeAccumulatesExcludesWithoutDuplicates(): void

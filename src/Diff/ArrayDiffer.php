@@ -31,6 +31,10 @@ final class ArrayDiffer
      *        mirrored "id") are neutralized so entries can pair up.
      * @param float|null $floatTolerance When set, two floats count as equal if
      *        they differ by at most this much. Null compares them strictly.
+     * @param bool $numericStringsEqualNumbers When true, a numeric string on
+     *        one side and the same number on the other are treated as equal.
+     *        Off by default: a notation change is worth seeing until it has
+     *        been decided.
      * @return list<FieldDiff>
      */
     public function diff(
@@ -42,6 +46,7 @@ final class ArrayDiffer
         bool $emptyArrayEqualsMissing = true,
         bool $normalizeUuidKeys = true,
         ?float $floatTolerance = null,
+        bool $numericStringsEqualNumbers = false,
     ): array {
         $context = new DiffContext(
             $ignore,
@@ -50,6 +55,7 @@ final class ArrayDiffer
             $emptyArrayEqualsMissing,
             $normalizeUuidKeys,
             $floatTolerance,
+            $numericStringsEqualNumbers,
         );
 
         $diffs = [];
@@ -304,7 +310,44 @@ final class ArrayDiffer
             return abs($a - $b) <= $context->floatTolerance;
         }
 
+        if ($context->numericStringsEqualNumbers && $this->numericStringEqualsNumber($a, $b, $context)) {
+            return true;
+        }
+
         return false;
+    }
+
+    /**
+     * True when one side is a numeric string and the other is the same number.
+     *
+     * Deliberately narrow. Against an int only the exact decimal form counts,
+     * so "600" equals 600 while "1e3" does not equal 1000: casting both sides
+     * instead would lose precision above 2^53 and could call two different ids
+     * equal. Against a float the configured tolerance applies if there is one,
+     * because the pair is then a precision question as well as a notation one.
+     */
+    private function numericStringEqualsNumber(mixed $a, mixed $b, DiffContext $context): bool
+    {
+        [$string, $number] = match (true) {
+            is_string($a) && (is_int($b) || is_float($b)) => [$a, $b],
+            is_string($b) && (is_int($a) || is_float($a)) => [$b, $a],
+            default => [null, null],
+        };
+
+        if ($string === null || !is_numeric($string)) {
+            return false;
+        }
+
+        if (is_int($number)) {
+            return $string === (string) $number;
+        }
+
+        $value = (float) $string;
+        if ($context->floatTolerance !== null) {
+            return abs($value - $number) <= $context->floatTolerance;
+        }
+
+        return $value === $number;
     }
 
     private function closureSource(\Closure $closure): string

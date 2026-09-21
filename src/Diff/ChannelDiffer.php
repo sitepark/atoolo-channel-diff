@@ -57,6 +57,7 @@ final class ChannelDiffer
             $emptyArrayEqualsMissing,
             $normalizeUuidKeys,
             $rules->floatTolerance(),
+            $rules->numericStringsEqualNumbers,
         );
 
         $mediaDiffs = [];
@@ -103,6 +104,7 @@ final class ChannelDiffer
         bool $emptyArrayEqualsMissing,
         bool $normalizeUuidKeys,
         ?float $floatTolerance,
+        bool $numericStringsEqualNumbers,
     ): array {
         $mapA = $this->enumerator->resources($a, $scope);
         $mapB = $this->enumerator->resources($b, $scope);
@@ -162,6 +164,7 @@ final class ChannelDiffer
                 $emptyArrayEqualsMissing,
                 $normalizeUuidKeys,
                 $floatTolerance,
+                $numericStringsEqualNumbers,
             );
             if ($fieldDiffs === []) {
                 $identical++;
