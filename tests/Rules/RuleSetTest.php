@@ -119,4 +119,12 @@ final class RuleSetTest extends TestCase
             );
         }
     }
+
+    public function testMergeAccumulatesMaskHashesWithoutDuplicates(): void
+    {
+        $merged = (new RuleSet(maskHashes: ['a', 'b']))->merge(new RuleSet(maskHashes: ['b', 'c']));
+
+        self::assertSame(['a', 'b', 'c'], $merged->maskHashes);
+        self::assertFalse((new RuleSet(maskHashes: ['a']))->isEmpty());
+    }
 }

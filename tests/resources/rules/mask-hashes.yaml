@@ -1,0 +1,3 @@
+maskHashes:
+  - '**/.htpasswd'
+  - 'objects/htpasswd'

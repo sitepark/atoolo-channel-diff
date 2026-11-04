@@ -17,6 +17,8 @@ use Symfony\Component\Yaml\Yaml;
  *       - 'testseiten/only-here.php'
  *     floatPrecision: 7
  *     numericStringsEqualNumbers: true
+ *     maskHashes:
+ *       - 'objects/.htpasswd'
  *
  * The file is parsed as data, never executed, since it lives next to the
  * publication channels rather than in this project.
@@ -37,6 +39,7 @@ final class RuleFileLoader
         'excludeResources',
         'floatPrecision',
         'numericStringsEqualNumbers',
+        'maskHashes',
     ];
 
     public function load(string $file): RuleSet
@@ -75,6 +78,7 @@ final class RuleFileLoader
             $this->readFloatPrecision($file, $parsed),
             [$file],
             $this->readBool($file, $parsed, 'numericStringsEqualNumbers'),
+            $this->readStringList($file, $parsed, 'maskHashes'),
         );
     }
 

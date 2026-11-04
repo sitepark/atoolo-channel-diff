@@ -190,4 +190,20 @@ final class RuleFileLoaderTest extends TestCase
 
         RuleFileLoader::validatePrecision(-1);
     }
+
+    public function testLoadsMaskHashes(): void
+    {
+        $rules = $this->loader->load($this->file('mask-hashes.yaml'));
+
+        self::assertSame(['**/.htpasswd', 'objects/htpasswd'], $rules->maskHashes);
+        self::assertFalse($rules->isEmpty());
+    }
+
+    public function testMaskHashesMustBeAList(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('"maskHashes" must be a list');
+
+        $this->loader->load($this->file('mask-hashes-not-a-list.yaml'));
+    }
 }

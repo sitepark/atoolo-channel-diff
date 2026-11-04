@@ -28,6 +28,10 @@ final class RuleSet
      *        this blinds no field: a value that really changed is still
      *        reported, only the notation may differ. Off by default, because
      *        a type change is worth seeing until someone has decided it.
+     * @param list<string> $maskHashes slash-notation file paths (wildcards
+     *        allowed) of text files whose `user:hash` lines are compared with
+     *        the hash part masked, because the hash differs on every run
+     *        (htpasswd with a random crypt salt)
      */
     public function __construct(
         public readonly array $excludes = [],
@@ -35,6 +39,7 @@ final class RuleSet
         public readonly ?int $floatPrecision = null,
         public readonly array $sources = [],
         public readonly bool $numericStringsEqualNumbers = false,
+        public readonly array $maskHashes = [],
     ) {}
 
     public function isEmpty(): bool
@@ -42,7 +47,8 @@ final class RuleSet
         return $this->excludes === []
             && $this->excludeResources === []
             && $this->floatPrecision === null
-            && !$this->numericStringsEqualNumbers;
+            && !$this->numericStringsEqualNumbers
+            && $this->maskHashes === [];
     }
 
     /**
@@ -62,6 +68,7 @@ final class RuleSet
             $other->floatPrecision ?? $this->floatPrecision,
             array_values(array_unique([...$this->sources, ...$other->sources])),
             $this->numericStringsEqualNumbers || $other->numericStringsEqualNumbers,
+            array_values(array_unique([...$this->maskHashes, ...$other->maskHashes])),
         );
     }
 
