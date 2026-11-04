@@ -50,6 +50,59 @@ final class ResourceEnumerator
     }
 
     /**
+     * PHP files of one system directory next to the resource tree ("configs",
+     * "redirects"). Keys carry the directory name as prefix.
+     *
+     * @return array<string, string> key => absolute path
+     */
+    public function systemResources(
+        PublicationChannel $channel,
+        string $name,
+        ChannelScope $scope = new ChannelScope(),
+    ): array {
+        $root = $channel->systemDirs()[$name] ?? null;
+        if ($root === null) {
+            return [];
+        }
+
+        return $this->collectScoped($channel, $root, $scope, true, $name);
+    }
+
+    /**
+     * Non-PHP files of the resource tree and of the system directories
+     * (htaccess, htpasswd, JSON, ...). Keys carry the directory name as
+     * prefix; editor leftovers (swap and backup files) are skipped. Empty in
+     * the DOCUMENT_ROOT layout, where these files are indistinguishable from
+     * media.
+     *
+     * @return array<string, string> key => absolute path
+     */
+    public function files(
+        PublicationChannel $channel,
+        ChannelScope $scope = new ChannelScope(),
+    ): array {
+        $dirs = $channel->systemDirs();
+        if ($dirs === []) {
+            return [];
+        }
+
+        $map = $this->collectScoped(
+            $channel,
+            $channel->resourceDir,
+            $scope,
+            false,
+            $channel->resourcePrefix(),
+            true,
+        );
+        foreach ($dirs as $name => $root) {
+            $map += $this->collectScoped($channel, $root, $scope, false, $name, true);
+        }
+        ksort($map);
+
+        return $map;
+    }
+
+    /**
      * @return array<string, string>
      */
     private function collectScoped(
@@ -57,6 +110,8 @@ final class ResourceEnumerator
         string $root,
         ChannelScope $scope,
         bool $php,
+        string $rootKey = '',
+        bool $skipEditorFiles = false,
     ): array {
         $prefix = $scope->prefixWithin($channel->baseDir, $root);
         if ($prefix === null) {
@@ -64,12 +119,14 @@ final class ResourceEnumerator
             return [];
         }
 
-        return $this->collect($root, $channel->layout, $php, $prefix);
+        return $this->collect($root, $channel->layout, $php, $prefix, $rootKey, $skipEditorFiles);
     }
 
     /**
      * @param string $prefix sub directory of $root to walk; '' means the whole
      *                       root. Keys stay relative to $root either way.
+     * @param string $rootKey prepended to every key; '' for the resource and
+     *                        media trees, the directory name for system files
      * @return array<string, string>
      */
     private function collect(
@@ -77,6 +134,8 @@ final class ResourceEnumerator
         ChannelLayout $layout,
         bool $php,
         string $prefix,
+        string $rootKey = '',
+        bool $skipEditorFiles = false,
     ): array {
         // In DOCUMENT_ROOT the SiteKit framework (WEB-IES) lives inside the
         // resource tree; it is infrastructure, not publication content. The
@@ -103,13 +162,20 @@ final class ResourceEnumerator
             $finder->notPath('WEB-IES');
         }
 
+        if ($skipEditorFiles) {
+            // Regex rather than globs: a glob star does not match a leading dot,
+            // and vim swap files are dot files.
+            $finder->notName('/\.sw[a-p]$|~$/');
+        }
+
         if ($php) {
             $finder->name('*.php');
         } else {
             $finder->notName('*.php');
         }
 
-        $keyPrefix = $prefix === '' ? '' : $prefix . '/';
+        $keyPrefix = ($rootKey === '' ? '' : $rootKey . '/')
+            . ($prefix === '' ? '' : $prefix . '/');
 
         $map = [];
         foreach ($finder as $file) {

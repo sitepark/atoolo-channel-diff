@@ -55,6 +55,7 @@ final class DiffCommand extends Command
             ->addOption('rules', null, InputOption::VALUE_REQUIRED, 'Rule file (YAML) with accepted differences. By default the nearest "' . RuleFileLocator::FILE_NAMES[0] . '" at or above either channel base directory is used.')
             ->addOption('no-rules', null, InputOption::VALUE_NONE, 'Ignore any rule file found next to the channels.')
             ->addOption('float-precision', null, InputOption::VALUE_REQUIRED, 'Number of decimal places at which two floats still count as equal (overrides the rule file).')
+            ->addOption('mask-hashes', null, InputOption::VALUE_IS_ARRAY | InputOption::VALUE_REQUIRED, 'File path (wildcards allowed, repeatable) of a text file whose "user:hash" lines are compared with the hash masked, e.g. "**/.htpasswd".')
             ->addOption('no-media', null, InputOption::VALUE_NONE, 'Skip the binary media comparison.')
             ->addOption('strict-null', null, InputOption::VALUE_NONE, 'Treat a null field and a missing field as different (by default they are equal).')
             ->addOption('strict-empty-string', null, InputOption::VALUE_NONE, 'Treat an empty-string field and a missing field as different (by default they are equal).')
@@ -82,7 +83,9 @@ final class DiffCommand extends Command
                 . '    excludeResources:' . PHP_EOL
                 . '      - \'testseiten/only-one-channel-can-build-this.php\'' . PHP_EOL
                 . '    floatPrecision: 7' . PHP_EOL
-                . '    numericStringsEqualNumbers: true' . PHP_EOL . PHP_EOL
+                . '    numericStringsEqualNumbers: true' . PHP_EOL
+                . '    maskHashes:' . PHP_EOL
+                . '      - \'**/.htpasswd\'' . PHP_EOL . PHP_EOL
                 . '"excludes" uses the same field paths and wildcards as --ignore. '
                 . '"floatPrecision" is the number of decimal places at which two '
                 . 'floats still count as equal.' . PHP_EOL . PHP_EOL
@@ -99,6 +102,12 @@ final class DiffCommand extends Command
                 . 'produce a page at all, so there is nothing to compare rather than '
                 . 'a difference to accept. The report lists each pattern with what it '
                 . 'removed, and warns about one that matched nothing.' . PHP_EOL . PHP_EOL
+                . 'In the RESOURCE layout the "configs" and "redirects" directories '
+                . '(PHP files returning arrays or lists) are compared like resources, '
+                . 'and non-PHP files below objects, configs and redirects by content: '
+                . 'JSON structurally, other text line by line, binary files by hash. '
+                . '"maskHashes" lists files (e.g. "**/.htpasswd") whose "user:hash" '
+                . 'lines are compared without the randomly salted hash.' . PHP_EOL . PHP_EOL
                 . 'Exit code 0 = identical, 1 = differences found, 2 = error.',
             );
     }
@@ -204,6 +213,12 @@ final class DiffCommand extends Command
         $excludeResources = $input->getOption('exclude-resource');
         if ($excludeResources !== []) {
             $rules = $rules->merge(new RuleSet(excludeResources: $excludeResources));
+        }
+
+        /** @var list<string> $maskHashes */
+        $maskHashes = $input->getOption('mask-hashes');
+        if ($maskHashes !== []) {
+            $rules = $rules->merge(new RuleSet(maskHashes: $maskHashes));
         }
 
         if ($input->getOption('numeric-strings') === true) {

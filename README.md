@@ -10,7 +10,9 @@
 
 A command-line tool to compare two IES publication channels. It loads the PHP
 resource files of each channel into their nested arrays and diffs them
-field-by-field; binary media files are compared by hash.
+field-by-field; binary media files are compared by hash. The system files next
+to the resources (`configs/`, `redirects/`, htaccess, htpasswd, JSON, ...) are
+compared as well.
 
 Typical use cases: verifying a channel after a re-publish, a publisher change,
 or a migration between environments.
@@ -28,6 +30,11 @@ or a migration between environments.
 - Resources and media are **matched by their relative file path**. Volatile
   fields (`version`, `created`, `changed`, `generated`, `changedBy`,
   `cacheInfo`) are ignored by default.
+
+- In the RESOURCE layouts the **system files** are compared too, each group in a
+  report section of its own (see [System files](#system-files)). In the
+  DOCUMENT_ROOT layout they are not separable from resources and media, so
+  there are no such sections.
 
 > **Note:** Because matching is by physical path, both channels should use the
 > **same layout**. Comparing channels of different layouts will report every
@@ -122,6 +129,7 @@ rejected.
 | `--no-rules` | Ignore any rule file found next to the channels. |
 | `--float-precision=<n>` | Number of decimal places at which two floats still count as equal. Overrides `floatPrecision` from the rule file. |
 | `--numeric-strings` | Treat a numeric string and the same number as equal (`"600"` and `600`). Off by default; also available as `numericStringsEqualNumbers` in the rule file. |
+| `--mask-hashes=<path>` | File (wildcards allowed, repeatable) whose `user:hash` lines are compared with the hash masked, e.g. `'**/.htpasswd'`. Adds to `maskHashes` from the rule file (see [System files](#system-files)). |
 | `--no-media` | Skip the binary media comparison. |
 | `--strict-null` | Treat a null field and a missing field as different. By default, a field that is `null` in one channel and absent in the other is considered equal. |
 | `--strict-empty-string` | Treat an empty-string field and a missing field as different. By default, a field that is `""` in one channel and absent in the other is considered equal. |
@@ -168,6 +176,7 @@ ignore a discovered one for a single run.
 | `excludes` | List of dot-notation field paths to exclude, with the same wildcards as `--ignore` (see below). |
 | `excludeResources` | List of slash-notation resource paths to leave out of the comparison entirely, together with their media. See [Excluding whole resources](#excluding-whole-resources). |
 | `floatPrecision` | Number of decimal places at which two floats still count as equal. Omit it to compare floats strictly. |
+| `maskHashes` | List of slash-notation file paths (same wildcards as `excludeResources`) of text files whose `user:hash` lines are compared with the hash masked. See [System files](#system-files). |
 | `numericStringsEqualNumbers` | `true` accepts a number written as a string on one side and as a number on the other. Omit it, or set `false`, to keep the strict comparison. |
 
 `floatPrecision: n` is applied as a tolerance of `0.5 × 10⁻ⁿ` rather than by
@@ -196,6 +205,61 @@ field's value *and* its presence out of the comparison for good, and is a trap
 for the next real defect on that path.
 
 Rule files are parsed as data and never executed, unlike `--ignore-config`.
+
+### System files
+
+In the RESOURCE layouts a channel holds more than `objects/` and
+`media/public/`. These files are compared in addition, each group as its own
+section of the report (console) or entry of `system` (JSON):
+
+| Section | Files | Compared as |
+| --- | --- | --- |
+| `Configs` | `configs/**/*.php` (`<?php return [...];`) | arrays, field by field, with the same rules as resources |
+| `Redirects` | `redirects/**/*.php` (a list of rules) | the list, field by field; the path is the list index, e.g. `1.replacement` (order is significant) |
+| `Files` | every non-PHP file below `objects/`, `configs/` and `redirects/` (htaccess, htpasswd, shortUrls, redirect maps, `languagePackage` JSON, ...) | by content, see below |
+
+Keys carry the directory name (`configs/indexer/genai.php`,
+`objects/.htaccess`). A section appears only if at least one of the two
+channels holds a file for it, so channels without such files report exactly as
+before. `[subPath]`, `--ignore`, `excludes`, `excludeResources`
+(matched against these keys, e.g. `configs/**`) and the strictness options
+apply to them as to resources; `--no-media` does not affect them.
+
+`Files` are compared by content:
+
+- **JSON** files (`*.json`) are parsed and diffed structurally like resources,
+  so key order and formatting do not matter. A file that does not parse falls
+  back to the text diff.
+- **Text** files get a line-based, unified-like diff (`-` = A, `+` = B, two
+  lines of context, capped at 100 output lines):
+
+  ```
+  ~ changed objects/shortUrls
+      @@ -2,5 +2,5 @@
+       two
+       three
+      -four
+      +FOUR
+  ```
+
+- **Binary** files (NUL byte or invalid UTF-8) are compared by sha256.
+
+Editor leftovers (`*.swp`, `*.swo`, `*~`) are not channel files and are skipped.
+
+#### Masking htpasswd hashes
+
+Entries with crypt hashes get a random salt, so an `.htpasswd` differs on every
+publication. List it under `maskHashes` to compare only the user names:
+
+```yaml
+maskHashes:
+  - '**/.htpasswd'
+```
+
+or use `--mask-hashes='**/.htpasswd'`. For a matching file everything after the
+first colon of each `user:hash` line is replaced by `<hash>` before comparing
+(lines starting with `#` and lines without a colon are left alone), so a changed
+user name, a missing or an added user is still reported.
 
 ### Excluding whole resources
 
@@ -286,6 +350,15 @@ the media comparison entirely:
 
 ```bash
 php bin/console channel:diff /path/to/A /path/to/B objects/de/produkte
+```
+
+Compare the system files of the Stuttgart channels (resources.old = previous
+publisher), masking the random htpasswd salts:
+
+```bash
+B=~/ies-environments/stuttgart/data/publications/stuttgart.veltrup.sitepark.de/www
+php bin/console channel:diff $B/resources.old $B/resources --mask-hashes='**/.htpasswd'
+php bin/console channel:diff $B/resources.old $B/resources configs   # only one system dir
 ```
 
 Produce a machine-readable report for CI:

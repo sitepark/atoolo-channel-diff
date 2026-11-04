@@ -11,6 +11,8 @@ use Atoolo\ChannelDiff\Diff\ExclusionStat;
 use Atoolo\ChannelDiff\Diff\FieldDiff;
 use Atoolo\ChannelDiff\Diff\MediaDiff;
 use Atoolo\ChannelDiff\Diff\ResourceDiff;
+use Atoolo\ChannelDiff\Diff\SystemSection;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
@@ -44,6 +46,9 @@ final class ConsoleReportRenderer
         if ($report->rules->numericStringsEqualNumbers) {
             $lines[] = 'Numeric strings: equal to the same number';
         }
+        foreach ($report->rules->maskHashes as $pattern) {
+            $lines[] = sprintf('Hashes masked in: %s', $pattern);
+        }
         foreach ($report->exclusionStats as $stat) {
             $lines[] = sprintf(
                 'Excluded resource: %s <fg=gray>(%s)</>',
@@ -57,7 +62,24 @@ final class ConsoleReportRenderer
         if ($report->mediaCompared) {
             $this->renderMedia($report, $io);
         }
+        foreach ($report->systemSections as $section) {
+            $this->renderSystemSection($section, $io);
+        }
         $this->renderSummary($report, $io);
+    }
+
+    private function renderSystemSection(SystemSection $section, SymfonyStyle $io): void
+    {
+        $io->section($section->name);
+
+        if ($section->diffs === []) {
+            $io->writeln(sprintf('<info>No %s differences.</info>', strtolower($section->name)));
+            return;
+        }
+
+        foreach ($section->diffs as $diff) {
+            $this->renderResourceDiff($diff, $io);
+        }
     }
 
     private function renderResources(DiffReport $report, SymfonyStyle $io): void
@@ -91,8 +113,25 @@ final class ConsoleReportRenderer
                 foreach ($diff->fieldDiffs as $field) {
                     $io->writeln('    ' . $this->renderField($field));
                 }
+                if ($diff->textDiff !== null) {
+                    foreach (explode("\n", $diff->textDiff) as $line) {
+                        $io->writeln('    ' . $this->renderTextLine($line));
+                    }
+                }
                 break;
         }
+    }
+
+    private function renderTextLine(string $line): string
+    {
+        $escaped = OutputFormatter::escape($line);
+
+        return match ($line[0] ?? '') {
+            '-' => '<fg=red>' . $escaped . '</>',
+            '+' => '<fg=green>' . $escaped . '</>',
+            '@' => '<fg=gray>' . $escaped . '</>',
+            default => $escaped,
+        };
     }
 
     private function renderField(FieldDiff $field): string
@@ -195,6 +234,12 @@ final class ConsoleReportRenderer
             if ($report->mediaExcluded > 0) {
                 $rows[] = ['Media excluded', (string) $report->mediaExcluded];
             }
+        }
+        foreach ($report->systemSections as $section) {
+            $rows[] = [$section->name . ' A', (string) $section->totalA];
+            $rows[] = [$section->name . ' B', (string) $section->totalB];
+            $rows[] = [$section->name . ' identical', (string) $section->identical];
+            $rows[] = [$section->name . ' differing', (string) count($section->diffs)];
         }
         $io->table(['Metric', 'Count'], $rows);
 

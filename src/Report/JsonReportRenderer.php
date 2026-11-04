@@ -10,6 +10,7 @@ use Atoolo\ChannelDiff\Diff\ExclusionStat;
 use Atoolo\ChannelDiff\Diff\FieldDiff;
 use Atoolo\ChannelDiff\Diff\MediaDiff;
 use Atoolo\ChannelDiff\Diff\ResourceDiff;
+use Atoolo\ChannelDiff\Diff\SystemSection;
 
 /**
  * Renders a {@see DiffReport} as a machine-readable JSON document.
@@ -58,6 +59,13 @@ final class JsonReportRenderer
             'hasDifferences' => $report->hasDifferences(),
         ];
 
+        if ($report->rules->maskHashes !== []) {
+            $data['rules']['maskHashes'] = $report->rules->maskHashes;
+        }
+        if ($report->systemSections !== []) {
+            $data['system'] = array_map($this->systemSection(...), $report->systemSections);
+        }
+
         $json = json_encode(
             $data,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
@@ -65,6 +73,24 @@ final class JsonReportRenderer
         );
 
         return $json !== false ? $json : '{}';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function systemSection(SystemSection $section): array
+    {
+        return [
+            'name' => $section->name,
+            'totalA' => $section->totalA,
+            'totalB' => $section->totalB,
+            'identical' => $section->identical,
+            'differing' => count($section->diffs),
+            'entries' => array_map(
+                fn(ResourceDiff $diff): array => $this->resource($diff) + ['textDiff' => $diff->textDiff],
+                $section->diffs,
+            ),
+        ];
     }
 
     /**

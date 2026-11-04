@@ -289,4 +289,58 @@ final class DiffCommandTest extends TestCase
         self::assertSame(0, $tester->getStatusCode());
         self::assertStringNotContainsString('does not exist', $tester->getDisplay());
     }
+
+    private function systemDiff(array $extra = []): CommandTester
+    {
+        $tester = $this->tester();
+        $tester->execute($extra + [
+            'channelA' => self::FIXTURES . '/systemA',
+            'channelB' => self::FIXTURES . '/systemB',
+            '--no-rules' => true,
+        ]);
+
+        return $tester;
+    }
+
+    public function testSystemSectionsAreRenderedInTheConsoleReport(): void
+    {
+        $display = $this->systemDiff()->getDisplay();
+
+        foreach (['Configs', 'Redirects', 'Files'] as $title) {
+            self::assertStringContainsString($title . "\n", $display);
+        }
+        self::assertStringContainsString('~ changed configs/indexer/genai.php', $display);
+        self::assertStringContainsString('~ model: a => b', $display);
+        self::assertStringContainsString('-four', $display);
+        self::assertStringContainsString('+FOUR', $display);
+        self::assertStringContainsString('Files differing', $display);
+    }
+
+    public function testChannelsWithoutSystemFilesKeepTheirOutput(): void
+    {
+        $display = $this->diff(null)->getDisplay();
+
+        foreach (['Configs', 'Redirects', 'Files'] as $title) {
+            self::assertStringNotContainsString($title, $display);
+        }
+    }
+
+    public function testSystemSectionsAreRenderedInTheJsonReport(): void
+    {
+        $json = json_decode($this->systemDiff(['--format' => 'json'])->getDisplay(), true);
+
+        self::assertIsArray($json);
+        self::assertSame(['Configs', 'Redirects', 'Files'], array_column($json['system'], 'name'));
+        self::assertArrayNotHasKey('maskHashes', $json['rules']);
+    }
+
+    public function testMaskHashesOptionMakesTheHtpasswdEqual(): void
+    {
+        $plain = $this->systemDiff()->getDisplay();
+        $masked = $this->systemDiff(['--mask-hashes' => ['**/.htpasswd']])->getDisplay();
+
+        self::assertStringContainsString('objects/.htpasswd', $plain);
+        self::assertStringNotContainsString('objects/.htpasswd', $masked);
+        self::assertStringContainsString('Hashes masked in: **/.htpasswd', $masked);
+    }
 }

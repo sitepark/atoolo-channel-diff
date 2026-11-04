@@ -24,6 +24,9 @@ final class DiffReport
      *        counted over both channels together
      * @param list<ExclusionStat> $exclusionStats what each exclusion pattern
      *        actually removed
+     * @param list<SystemSection> $systemSections configs, redirects and other
+     *        files outside the resource and media trees; only sections that
+     *        hold at least one file in either channel
      */
     public function __construct(
         public readonly PublicationChannel $channelA,
@@ -42,11 +45,21 @@ final class DiffReport
         public readonly int $resourcesExcluded = 0,
         public readonly int $mediaExcluded = 0,
         public readonly array $exclusionStats = [],
+        public readonly array $systemSections = [],
     ) {}
 
     public function hasDifferences(): bool
     {
-        return $this->resourceDiffs !== [] || $this->mediaDiffs !== [];
+        if ($this->resourceDiffs !== [] || $this->mediaDiffs !== []) {
+            return true;
+        }
+        foreach ($this->systemSections as $section) {
+            if ($section->diffs !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

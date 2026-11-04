@@ -10,6 +10,7 @@ use Atoolo\ChannelDiff\Enumerator\ResourceEnumerator;
 use Atoolo\ChannelDiff\Loader\ResourceFileReader;
 use Atoolo\ChannelDiff\Loader\ResourceReadException;
 use Atoolo\ChannelDiff\Rules\RuleSet;
+use Closure;
 
 /**
  * Orchestrates the comparison of two publication channels: matches resources
@@ -21,6 +22,7 @@ final class ChannelDiffer
         private readonly ResourceEnumerator $enumerator,
         private readonly ResourceFileReader $reader,
         private readonly ArrayDiffer $arrayDiffer,
+        private readonly FileDiffer $fileDiffer = new FileDiffer(),
     ) {}
 
     public function diff(
@@ -40,6 +42,19 @@ final class ChannelDiffer
         $ignore = $ignore->withAdditional($rules->excludes);
         $exclusions = new ResourceExclusionList($rules->excludeResources);
 
+        $floatTolerance = $rules->floatTolerance();
+        $compare = fn(array $dataA, array $dataB): array => $this->arrayDiffer->diff(
+            $dataA,
+            $dataB,
+            $ignore,
+            $nullEqualsMissing,
+            $emptyStringEqualsMissing,
+            $emptyArrayEqualsMissing,
+            $normalizeUuidKeys,
+            $floatTolerance,
+            $rules->numericStringsEqualNumbers,
+        );
+
         [
             $resourceDiffs,
             $resourcesIdentical,
@@ -47,18 +62,23 @@ final class ChannelDiffer
             $totalB,
             $resourceHits,
         ] = $this->diffResources(
+            $this->enumerator->resources($a, $scope),
+            $this->enumerator->resources($b, $scope),
+            $exclusions,
+            $compare,
+        );
+
+        [$systemSections, $systemHits] = $this->diffSystem(
             $a,
             $b,
-            $ignore,
             $scope,
             $exclusions,
-            $nullEqualsMissing,
-            $emptyStringEqualsMissing,
-            $emptyArrayEqualsMissing,
-            $normalizeUuidKeys,
-            $rules->floatTolerance(),
-            $rules->numericStringsEqualNumbers,
+            $compare,
+            new ResourceExclusionList($rules->maskHashes),
         );
+        foreach ($systemHits as $pattern => $count) {
+            $resourceHits[$pattern] += $count;
+        }
 
         $mediaDiffs = [];
         $mediaIdentical = 0;
@@ -87,28 +107,121 @@ final class ChannelDiffer
             array_sum($resourceHits),
             array_sum($mediaHits),
             self::exclusionStats($exclusions, $resourceHits, $mediaHits),
+            $systemSections,
         );
     }
 
     /**
+     * Configs, redirects and non-PHP files; each section appears only if
+     * either channel holds a file for it, so channels without them report
+     * exactly what they always did.
+     *
+     * @param Closure(array<array-key, mixed>, array<array-key, mixed>): list<FieldDiff> $compare
+     * @return array{0: list<SystemSection>, 1: array<string, int>}
+     */
+    private function diffSystem(
+        PublicationChannel $a,
+        PublicationChannel $b,
+        ChannelScope $scope,
+        ResourceExclusionList $exclusions,
+        Closure $compare,
+        ResourceExclusionList $maskHashes,
+    ): array {
+        $sections = [];
+        $hits = self::noHits($exclusions);
+
+        foreach (['configs' => 'Configs', 'redirects' => 'Redirects'] as $dir => $title) {
+            $mapA = $this->enumerator->systemResources($a, $dir, $scope);
+            $mapB = $this->enumerator->systemResources($b, $dir, $scope);
+            if ($mapA === [] && $mapB === []) {
+                continue;
+            }
+            [$diffs, $identical, $totalA, $totalB, $sectionHits]
+                = $this->diffResources($mapA, $mapB, $exclusions, $compare);
+            foreach ($sectionHits as $pattern => $count) {
+                $hits[$pattern] += $count;
+            }
+            $sections[] = new SystemSection($title, $diffs, $totalA, $totalB, $identical);
+        }
+
+        $mapA = $this->enumerator->files($a, $scope);
+        $mapB = $this->enumerator->files($b, $scope);
+        if ($mapA !== [] || $mapB !== []) {
+            [$diffs, $identical, $totalA, $totalB, $sectionHits]
+                = $this->diffFiles($mapA, $mapB, $exclusions, $compare, $maskHashes);
+            foreach ($sectionHits as $pattern => $count) {
+                $hits[$pattern] += $count;
+            }
+            $sections[] = new SystemSection('Files', $diffs, $totalA, $totalB, $identical);
+        }
+
+        return [$sections, $hits];
+    }
+
+    /**
+     * @param array<string, string> $mapA
+     * @param array<string, string> $mapB
+     * @param Closure(array<array-key, mixed>, array<array-key, mixed>): list<FieldDiff> $compare
+     * @return array{0: list<ResourceDiff>, 1: int, 2: int, 3: int, 4: array<string, int>}
+     */
+    private function diffFiles(
+        array $mapA,
+        array $mapB,
+        ResourceExclusionList $exclusions,
+        Closure $compare,
+        ResourceExclusionList $maskHashes,
+    ): array {
+        $diffs = [];
+        $identical = 0;
+        $hits = self::noHits($exclusions);
+
+        foreach ($this->unionKeys($mapA, $mapB) as $key) {
+            $pattern = $exclusions->matchResource($key);
+            if ($pattern !== null) {
+                $hits[$pattern]++;
+                unset($mapA[$key], $mapB[$key]);
+                continue;
+            }
+
+            $inA = isset($mapA[$key]);
+            $inB = isset($mapB[$key]);
+            if ($inA !== $inB) {
+                $diffs[] = new ResourceDiff(
+                    $key,
+                    $inA ? EntryStatus::ONLY_IN_A : EntryStatus::ONLY_IN_B,
+                );
+                continue;
+            }
+
+            $diff = $this->fileDiffer->compare(
+                $key,
+                $mapA[$key],
+                $mapB[$key],
+                $compare,
+                $maskHashes->matchResource($key) !== null,
+            );
+            if ($diff === null) {
+                $identical++;
+                continue;
+            }
+            $diffs[] = $diff;
+        }
+
+        return [$diffs, $identical, count($mapA), count($mapB), $hits];
+    }
+
+    /**
+     * @param array<string, string> $mapA
+     * @param array<string, string> $mapB
+     * @param Closure(array<array-key, mixed>, array<array-key, mixed>): list<FieldDiff> $compare
      * @return array{0: list<ResourceDiff>, 1: int, 2: int, 3: int, 4: array<string, int>}
      */
     private function diffResources(
-        PublicationChannel $a,
-        PublicationChannel $b,
-        IgnoreList $ignore,
-        ChannelScope $scope,
+        array $mapA,
+        array $mapB,
         ResourceExclusionList $exclusions,
-        bool $nullEqualsMissing,
-        bool $emptyStringEqualsMissing,
-        bool $emptyArrayEqualsMissing,
-        bool $normalizeUuidKeys,
-        ?float $floatTolerance,
-        bool $numericStringsEqualNumbers,
+        Closure $compare,
     ): array {
-        $mapA = $this->enumerator->resources($a, $scope);
-        $mapB = $this->enumerator->resources($b, $scope);
-
         $diffs = [];
         $identical = 0;
         $hits = self::noHits($exclusions);
@@ -155,17 +268,7 @@ final class ChannelDiffer
                 continue;
             }
 
-            $fieldDiffs = $this->arrayDiffer->diff(
-                $dataA,
-                $dataB,
-                $ignore,
-                $nullEqualsMissing,
-                $emptyStringEqualsMissing,
-                $emptyArrayEqualsMissing,
-                $normalizeUuidKeys,
-                $floatTolerance,
-                $numericStringsEqualNumbers,
-            );
+            $fieldDiffs = $compare($dataA, $dataB);
             if ($fieldDiffs === []) {
                 $identical++;
                 continue;

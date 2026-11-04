@@ -25,7 +25,8 @@ use Throwable;
 final class ResourceFileReader
 {
     /**
-     * @return array<string, mixed>
+     * @return array<array-key, mixed> a list for list-shaped files such as
+     *         the redirect rules
      * @throws ResourceReadException
      */
     public function read(string $file): array
@@ -54,7 +55,6 @@ final class ResourceFileReader
             throw new ResourceReadException($file, 'resource did not return an array');
         }
 
-        /** @var array<string, mixed> $data */
         return $data;
     }
 }
