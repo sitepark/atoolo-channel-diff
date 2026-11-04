@@ -131,6 +131,23 @@ final class ChannelDifferSystemTest extends TestCase
         self::assertSame(['de.hello'], array_map(static fn($f) => $f->path, $json->fieldDiffs));
     }
 
+    public function testChangedTextMediaCarryTheLineDiff(): void
+    {
+        $byKey = [];
+        foreach ($this->report()->mediaDiffs as $diff) {
+            $byKey[$diff->key] = $diff;
+        }
+
+        self::assertSame(['icon.png', 'robots.txt'], array_keys($byKey));
+        self::assertStringContainsString(
+            "-Disallow: /intern/\n+Disallow: /internal/",
+            (string) $byKey['robots.txt']->textDiff,
+            'a text published as a medium shows what changed, not only that it did',
+        );
+        self::assertNull($byKey['icon.png']->textDiff, 'a binary medium keeps its hashes only');
+        self::assertNotNull($byKey['icon.png']->hashA);
+    }
+
     public function testHtpasswdHashesCanBeMasked(): void
     {
         $plain = $this->byKey($this->section($this->report(), 'Files'));

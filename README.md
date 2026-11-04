@@ -10,7 +10,9 @@
 
 A command-line tool to compare two IES publication channels. It loads the PHP
 resource files of each channel into their nested arrays and diffs them
-field-by-field; binary media files are compared by hash. The system files next
+field-by-field; media files are compared by hash, and a changed media file that
+is text on both sides (robots.txt, a text resource published as a medium, up to
+1 MiB) shows its line diff as well. The system files next
 to the resources (`configs/`, `redirects/`, htaccess, htpasswd, JSON, ...) are
 compared as well.
 

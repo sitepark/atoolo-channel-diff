@@ -168,6 +168,7 @@ final class JsonReportRenderer
             'status' => $diff->status->value,
             'hashA' => $diff->hashA,
             'hashB' => $diff->hashB,
+            'textDiff' => $diff->textDiff,
         ];
     }
 }

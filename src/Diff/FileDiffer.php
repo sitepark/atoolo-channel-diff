@@ -17,6 +17,9 @@ use JsonException;
  */
 final class FileDiffer
 {
+    /** Media larger than this are only hashed: a text diff would not be read. */
+    public const MAX_TEXT_MEDIA_BYTES = 1048576;
+
     public function __construct(
         private readonly TextDiffer $textDiffer = new TextDiffer(),
     ) {}
@@ -67,6 +70,30 @@ final class FileDiffer
         return $text === ''
             ? null
             : new ResourceDiff($key, EntryStatus::CHANGED, textDiff: $text);
+    }
+
+    /**
+     * The line diff of two text files, for a media file whose hashes differ.
+     *
+     * @return string|null null if a file cannot be read, is binary or larger
+     *         than {@see self::MAX_TEXT_MEDIA_BYTES}
+     */
+    public function textDiff(string $fileA, string $fileB): ?string
+    {
+        foreach ([$fileA, $fileB] as $file) {
+            $size = @filesize($file);
+            if ($size === false || $size > self::MAX_TEXT_MEDIA_BYTES) {
+                return null;
+            }
+        }
+        $contentA = file_get_contents($fileA);
+        $contentB = file_get_contents($fileB);
+        if ($contentA === false || $contentB === false
+            || self::isBinary($contentA) || self::isBinary($contentB)) {
+            return null;
+        }
+
+        return $this->textDiffer->diff($contentA, $contentB);
     }
 
     /**

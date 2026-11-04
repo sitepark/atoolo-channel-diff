@@ -186,6 +186,11 @@ final class ConsoleReportRenderer
                     substr((string) $diff->hashA, 0, 12),
                     substr((string) $diff->hashB, 0, 12),
                 ));
+                if ($diff->textDiff !== null && $diff->textDiff !== '') {
+                    foreach (explode("\n", $diff->textDiff) as $line) {
+                        $io->writeln('    ' . $this->renderTextLine($line));
+                    }
+                }
                 break;
             case EntryStatus::READ_ERROR:
                 break;

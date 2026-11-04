@@ -330,7 +330,13 @@ final class ChannelDiffer
                 continue;
             }
 
-            $diffs[] = new MediaDiff($key, EntryStatus::CHANGED, $hashA, $hashB);
+            $diffs[] = new MediaDiff(
+                $key,
+                EntryStatus::CHANGED,
+                $hashA,
+                $hashB,
+                $this->fileDiffer->textDiff($mapA[$key], $mapB[$key]),
+            );
         }
 
         return [$diffs, $identical, count($mapA), count($mapB), $hits];
