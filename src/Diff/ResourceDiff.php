@@ -11,6 +11,8 @@ final class ResourceDiff
 {
     /**
      * @param list<FieldDiff> $fieldDiffs
+     * @param string|null $textDiff unified-like line diff of a text file, or
+     *        a note for a binary one; set instead of $fieldDiffs
      */
     public function __construct(
         public readonly string $key,
@@ -18,5 +20,6 @@ final class ResourceDiff
         public readonly array $fieldDiffs = [],
         public readonly ?string $label = null,
         public readonly ?string $error = null,
+        public readonly ?string $textDiff = null,
     ) {}
 }
