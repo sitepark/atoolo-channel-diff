@@ -8,16 +8,16 @@
     "packages": [
         {
             "name": "atoolo/resource-bundle",
-            "version": "1.9.0",
+            "version": "1.9.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sitepark/atoolo-resource-bundle.git",
-                "reference": "0766c2a6f12c072631f4f9243952b8f543287ceb"
+                "reference": "a41507088e4f47cc8fb2e1b5878ab3dd835e24e7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sitepark/atoolo-resource-bundle/zipball/0766c2a6f12c072631f4f9243952b8f543287ceb",
-                "reference": "0766c2a6f12c072631f4f9243952b8f543287ceb",
+                "url": "https://api.github.com/repos/sitepark/atoolo-resource-bundle/zipball/a41507088e4f47cc8fb2e1b5878ab3dd835e24e7",
+                "reference": "a41507088e4f47cc8fb2e1b5878ab3dd835e24e7",
                 "shasum": ""
             },
             "require": {
@@ -60,9 +60,9 @@
             "description": "Handle pre-produced data",
             "support": {
                 "issues": "https://github.com/sitepark/atoolo-resource-bundle/issues",
-                "source": "https://github.com/sitepark/atoolo-resource-bundle/tree/1.9.0"
+                "source": "https://github.com/sitepark/atoolo-resource-bundle/tree/1.9.1"
             },
-            "time": "2026-09-21T09:45:01+00:00"
+            "time": "2026-10-28T11:03:58+00:00"
         },
         {
             "name": "psr/cache",
