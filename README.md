@@ -366,11 +366,11 @@ the media comparison entirely:
 php bin/console channel:diff /path/to/A /path/to/B objects/de/produkte
 ```
 
-Compare the system files of the Stuttgart channels (resources.old = previous
-publisher), masking the random htpasswd salts:
+Compare the system files of a channel before and after a publisher change
+(resources.old = previous publisher), masking the random htpasswd salts:
 
 ```bash
-B=~/ies-environments/stuttgart/data/publications/stuttgart.veltrup.sitepark.de/www
+B=~/ies-environments/site/data/publications/host/www
 php bin/console channel:diff $B/resources.old $B/resources --mask-hashes='**/.htpasswd'
 php bin/console channel:diff $B/resources.old $B/resources configs   # only one system dir
 ```
