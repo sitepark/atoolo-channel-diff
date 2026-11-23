@@ -32,6 +32,10 @@ final class RuleSet
      *        allowed) of text files whose `user:hash` lines are compared with
      *        the hash part masked, because the hash differs on every run
      *        (htpasswd with a random crypt salt)
+     * @param bool $trimmedStringsEqual when true, two strings that differ
+     *        only in leading or trailing whitespace count as equal ("Smith "
+     *        == "Smith"). Like numericStringsEqualNumbers it blinds no field:
+     *        a text that really changed is still reported. Off by default.
      */
     public function __construct(
         public readonly array $excludes = [],
@@ -40,6 +44,7 @@ final class RuleSet
         public readonly array $sources = [],
         public readonly bool $numericStringsEqualNumbers = false,
         public readonly array $maskHashes = [],
+        public readonly bool $trimmedStringsEqual = false,
     ) {}
 
     public function isEmpty(): bool
@@ -48,7 +53,8 @@ final class RuleSet
             && $this->excludeResources === []
             && $this->floatPrecision === null
             && !$this->numericStringsEqualNumbers
-            && $this->maskHashes === [];
+            && $this->maskHashes === []
+            && !$this->trimmedStringsEqual;
     }
 
     /**
@@ -56,7 +62,8 @@ final class RuleSet
      * in $other wins. Callers therefore pass the more specific set last (rule
      * file first, command line afterwards).
      *
-     * numericStringsEqualNumbers accumulates rather than being overwritten,
+     * numericStringsEqualNumbers and trimmedStringsEqual accumulate rather
+     * than being overwritten,
      * so that a set carrying only another rule - as the command line builds
      * one per option - does not silently switch it off again.
      */
@@ -69,6 +76,7 @@ final class RuleSet
             array_values(array_unique([...$this->sources, ...$other->sources])),
             $this->numericStringsEqualNumbers || $other->numericStringsEqualNumbers,
             array_values(array_unique([...$this->maskHashes, ...$other->maskHashes])),
+            $this->trimmedStringsEqual || $other->trimmedStringsEqual,
         );
     }
 

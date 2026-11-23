@@ -53,6 +53,7 @@ final class ChannelDiffer
             $normalizeUuidKeys,
             $floatTolerance,
             $rules->numericStringsEqualNumbers,
+            $rules->trimmedStringsEqual,
         );
 
         [

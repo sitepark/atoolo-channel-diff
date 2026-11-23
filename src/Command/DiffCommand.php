@@ -62,6 +62,7 @@ final class DiffCommand extends Command
             ->addOption('strict-empty-array', null, InputOption::VALUE_NONE, 'Treat an empty-array field and a missing field as different (by default they are equal).')
             ->addOption('strict-uuid-keys', null, InputOption::VALUE_NONE, 'Treat UUID array keys as significant (by default arrays keyed by UUIDs are matched by content, ignoring the volatile keys).')
             ->addOption('numeric-strings', null, InputOption::VALUE_NONE, 'Treat a numeric string and the same number as equal ("600" = 600). Off by default.')
+            ->addOption('trimmed-strings', null, InputOption::VALUE_NONE, 'Treat two strings that differ only in leading or trailing whitespace as equal. Off by default.')
             ->setHelp(
                 'Compares two IES publication channels by matching resources and '
                 . 'media on their relative file path. Resource PHP files are compared '
@@ -85,7 +86,8 @@ final class DiffCommand extends Command
                 . '    floatPrecision: 7' . PHP_EOL
                 . '    numericStringsEqualNumbers: true' . PHP_EOL
                 . '    maskHashes:' . PHP_EOL
-                . '      - \'**/.htpasswd\'' . PHP_EOL . PHP_EOL
+                . '      - \'**/.htpasswd\'' . PHP_EOL
+                . '    trimmedStringsEqual: true' . PHP_EOL . PHP_EOL
                 . '"excludes" uses the same field paths and wildcards as --ignore. '
                 . '"floatPrecision" is the number of decimal places at which two '
                 . 'floats still count as equal.' . PHP_EOL . PHP_EOL
@@ -95,6 +97,10 @@ final class DiffCommand extends Command
                 . 'is blinded, a value that really changed is still reported. Only '
                 . 'the exact decimal form of an integer counts, so "1e3" and 1000 '
                 . 'remain different.' . PHP_EOL . PHP_EOL
+                . '"trimmedStringsEqual" accepts two texts that differ only in '
+                . 'whitespace at either end ("Smith " and "Smith"). Like '
+                . 'numericStringsEqualNumbers it blinds no field: a text that '
+                . 'changed inside is still reported.' . PHP_EOL . PHP_EOL
                 . '"excludeResources" is different in kind: it names whole resources '
                 . 'by their slash-separated path, and a matched resource drops out of '
                 . 'the comparison altogether - along with the media in its '
@@ -223,6 +229,10 @@ final class DiffCommand extends Command
 
         if ($input->getOption('numeric-strings') === true) {
             $rules = $rules->merge(new RuleSet(numericStringsEqualNumbers: true));
+        }
+
+        if ($input->getOption('trimmed-strings') === true) {
+            $rules = $rules->merge(new RuleSet(trimmedStringsEqual: true));
         }
 
         $precision = $input->getOption('float-precision');
