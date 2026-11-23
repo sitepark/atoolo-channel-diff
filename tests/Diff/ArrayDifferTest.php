@@ -493,6 +493,55 @@ final class ArrayDifferTest extends TestCase
         self::assertSame([], $diffs);
     }
 
+    public function testTrimmedStringsAreEqualWhenEnabled(): void
+    {
+        $diffs = $this->differ->diff(
+            ['contactPoint' => ['lastname' => 'Smith ', 'notice' => "\tOpen on Mondays\n"]],
+            ['contactPoint' => ['lastname' => 'Smith', 'notice' => 'Open on Mondays']],
+            new IgnoreList([]),
+            trimmedStringsEqual: true,
+        );
+
+        self::assertSame([], $diffs);
+    }
+
+    public function testTrimmedStringsDifferWhileDisabled(): void
+    {
+        $diffs = $this->differ->diff(
+            ['lastname' => 'Smith '],
+            ['lastname' => 'Smith'],
+            new IgnoreList([]),
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    /** Only whitespace at either end counts: a text that changed inside still differs. */
+    public function testAChangeInsideAStringStillDiffersWhenTrimmed(): void
+    {
+        $diffs = $this->differ->diff(
+            ['lastname' => 'Smith '],
+            ['lastname' => 'Smyth'],
+            new IgnoreList([]),
+            trimmedStringsEqual: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
+    /** A string against a number is a type change, not whitespace. */
+    public function testTrimmingDoesNotEqualAStringAndANumber(): void
+    {
+        $diffs = $this->differ->diff(
+            ['height' => ' 600 '],
+            ['height' => 600],
+            new IgnoreList([]),
+            trimmedStringsEqual: true,
+        );
+
+        self::assertCount(1, $diffs);
+    }
+
     public function testNumericStringAndNumberDifferWhileDisabled(): void
     {
         $diffs = $this->differ->diff(

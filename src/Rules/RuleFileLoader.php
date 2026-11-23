@@ -19,6 +19,7 @@ use Symfony\Component\Yaml\Yaml;
  *     numericStringsEqualNumbers: true
  *     maskHashes:
  *       - 'objects/.htpasswd'
+ *     trimmedStringsEqual: true
  *
  * The file is parsed as data, never executed, since it lives next to the
  * publication channels rather than in this project.
@@ -40,6 +41,7 @@ final class RuleFileLoader
         'floatPrecision',
         'numericStringsEqualNumbers',
         'maskHashes',
+        'trimmedStringsEqual',
     ];
 
     public function load(string $file): RuleSet
@@ -79,6 +81,7 @@ final class RuleFileLoader
             [$file],
             $this->readBool($file, $parsed, 'numericStringsEqualNumbers'),
             $this->readStringList($file, $parsed, 'maskHashes'),
+            $this->readBool($file, $parsed, 'trimmedStringsEqual'),
         );
     }
 

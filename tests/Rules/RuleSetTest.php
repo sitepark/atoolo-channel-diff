@@ -29,6 +29,7 @@ final class RuleSetTest extends TestCase
         self::assertFalse((new RuleSet(excludeResources: ['page.php']))->isEmpty());
         self::assertFalse((new RuleSet(floatPrecision: 7))->isEmpty());
         self::assertFalse((new RuleSet(numericStringsEqualNumbers: true))->isEmpty());
+        self::assertFalse((new RuleSet(trimmedStringsEqual: true))->isEmpty());
     }
 
     /**
@@ -46,6 +47,15 @@ final class RuleSetTest extends TestCase
             ->merge(new RuleSet(numericStringsEqualNumbers: true));
 
         self::assertTrue($other->numericStringsEqualNumbers);
+    }
+
+    public function testMergeKeepsTrimmedStringsOnceAnySetEnabledIt(): void
+    {
+        $merged = (new RuleSet(trimmedStringsEqual: true))->merge(new RuleSet(['a.b']));
+        self::assertTrue($merged->trimmedStringsEqual);
+
+        $other = (new RuleSet(['a.b']))->merge(new RuleSet(trimmedStringsEqual: true));
+        self::assertTrue($other->trimmedStringsEqual);
     }
 
     public function testMergeAccumulatesExcludesWithoutDuplicates(): void

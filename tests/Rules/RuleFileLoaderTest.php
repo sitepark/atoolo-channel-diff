@@ -152,6 +152,28 @@ final class RuleFileLoaderTest extends TestCase
         self::assertFalse($rules->numericStringsEqualNumbers);
     }
 
+    public function testLoadsTrimmedStringsEqual(): void
+    {
+        $rules = $this->loader->load($this->file('trimmed-strings.yaml'));
+
+        self::assertTrue($rules->trimmedStringsEqual);
+    }
+
+    public function testTrimmedStringsEqualDefaultsToFalse(): void
+    {
+        $rules = $this->loader->load($this->file('valid.yaml'));
+
+        self::assertFalse($rules->trimmedStringsEqual);
+    }
+
+    public function testTrimmedStringsEqualMustBeABool(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('"trimmedStringsEqual" must be true or false, got string');
+
+        $this->loader->load($this->file('trimmed-strings-not-bool.yaml'));
+    }
+
     public function testNumericStringsEqualNumbersMustBeABool(): void
     {
         $this->expectException(InvalidArgumentException::class);

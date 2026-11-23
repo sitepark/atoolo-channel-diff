@@ -36,6 +36,7 @@ final class JsonReportRenderer
                 ),
                 'floatPrecision' => $report->rules->floatPrecision,
                 'numericStringsEqualNumbers' => $report->rules->numericStringsEqualNumbers,
+                'trimmedStringsEqual' => $report->rules->trimmedStringsEqual,
             ],
             'stats' => [
                 'resources' => [

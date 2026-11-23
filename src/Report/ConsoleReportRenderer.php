@@ -46,6 +46,9 @@ final class ConsoleReportRenderer
         if ($report->rules->numericStringsEqualNumbers) {
             $lines[] = 'Numeric strings: equal to the same number';
         }
+        if ($report->rules->trimmedStringsEqual) {
+            $lines[] = 'Strings: equal when they differ only in surrounding whitespace';
+        }
         foreach ($report->rules->maskHashes as $pattern) {
             $lines[] = sprintf('Hashes masked in: %s', $pattern);
         }

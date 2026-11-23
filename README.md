@@ -131,6 +131,7 @@ rejected.
 | `--no-rules` | Ignore any rule file found next to the channels. |
 | `--float-precision=<n>` | Number of decimal places at which two floats still count as equal. Overrides `floatPrecision` from the rule file. |
 | `--numeric-strings` | Treat a numeric string and the same number as equal (`"600"` and `600`). Off by default; also available as `numericStringsEqualNumbers` in the rule file. |
+| `--trimmed-strings` | Treat two strings that differ only in leading or trailing whitespace as equal (`"Smith "` and `"Smith"`). Off by default; also available as `trimmedStringsEqual` in the rule file. |
 | `--mask-hashes=<path>` | File (wildcards allowed, repeatable) whose `user:hash` lines are compared with the hash masked, e.g. `'**/.htpasswd'`. Adds to `maskHashes` from the rule file (see [System files](#system-files)). |
 | `--no-media` | Skip the binary media comparison. |
 | `--strict-null` | Treat a null field and a missing field as different. By default, a field that is `null` in one channel and absent in the other is considered equal. |
@@ -162,6 +163,9 @@ floatPrecision: 7
 
 # One channel writes a height as "600", the other as 600.
 numericStringsEqualNumbers: true
+
+# One channel keeps a trailing blank of a stored name, the other trims it.
+trimmedStringsEqual: true
 ```
 
 The file is looked up from each channel's base directory **upwards**, so a single
@@ -180,6 +184,7 @@ ignore a discovered one for a single run.
 | `floatPrecision` | Number of decimal places at which two floats still count as equal. Omit it to compare floats strictly. |
 | `maskHashes` | List of slash-notation file paths (same wildcards as `excludeResources`) of text files whose `user:hash` lines are compared with the hash masked. See [System files](#system-files). |
 | `numericStringsEqualNumbers` | `true` accepts a number written as a string on one side and as a number on the other. Omit it, or set `false`, to keep the strict comparison. |
+| `trimmedStringsEqual` | `true` accepts two strings that differ only in whitespace at either end. Omit it, or set `false`, to keep the strict comparison. |
 
 `floatPrecision: n` is applied as a tolerance of `0.5 × 10⁻ⁿ` rather than by
 rounding both sides, so two values that happen to straddle a rounding boundary
@@ -199,6 +204,13 @@ not equal `1000`, because casting both sides would lose precision above 2⁵³ a
 could call two different ids equal. Against a float the configured
 `floatPrecision` tolerance applies, since such a pair is a precision question
 as well as a notation one. Two strings are never compared this way.
+
+`trimmedStringsEqual: true` is the same kind of rule for text: no field is
+blinded, a text that changed inside is still reported, only whitespace at either
+end may differ (`"Smith "` and `"Smith"`). That is why it is preferable to
+excluding a field like a name, which would hide every real change of it. It
+compares strings with strings only - `" 600 "` against `600` remains a type
+change.
 
 Reach for it where two publishers disagree about notation rather than value,
 and where the consumer does not care — typically because it declares the type

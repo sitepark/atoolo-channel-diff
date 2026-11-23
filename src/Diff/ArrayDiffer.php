@@ -47,6 +47,7 @@ final class ArrayDiffer
         bool $normalizeUuidKeys = true,
         ?float $floatTolerance = null,
         bool $numericStringsEqualNumbers = false,
+        bool $trimmedStringsEqual = false,
     ): array {
         $context = new DiffContext(
             $ignore,
@@ -56,6 +57,7 @@ final class ArrayDiffer
             $normalizeUuidKeys,
             $floatTolerance,
             $numericStringsEqualNumbers,
+            $trimmedStringsEqual,
         );
 
         $diffs = [];
@@ -311,6 +313,11 @@ final class ArrayDiffer
         }
 
         if ($context->numericStringsEqualNumbers && $this->numericStringEqualsNumber($a, $b, $context)) {
+            return true;
+        }
+
+        // Whitespace at either end only: a text that changed inside still differs.
+        if ($context->trimmedStringsEqual && is_string($a) && is_string($b) && trim($a) === trim($b)) {
             return true;
         }
 
